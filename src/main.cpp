@@ -28,10 +28,15 @@ const uint8_t IN4 = 10;
 // Cámbielo a HIGH si sus sensores leen HIGH sobre la línea negra.
 const bool LINEA_ES_LOW = true;
 
+// Actívalo temporalmente para comprobar sensores en el Monitor Serial.
+// En este modo los motores permanecen detenidos.
+const bool MODO_PRUEBA_SENSORES = false;
+
 const uint8_t VELOCIDAD_BASE = 170;
 const uint8_t VELOCIDAD_GIRO = 130;
 
 bool ultimoGiroFueDerecha = true;
+unsigned long ultimaLecturaSerial = 0;
 
 bool estaSobreLinea(uint8_t pin) {
   return digitalRead(pin) == (LINEA_ES_LOW ? LOW : HIGH);
@@ -58,6 +63,23 @@ void detenerMotores() {
   digitalWrite(IN4, LOW);
 }
 
+void mostrarLecturasSensores(bool izquierdoEnLinea, bool derechoEnLinea) {
+  if (millis() - ultimaLecturaSerial < 250) {
+    return;
+  }
+
+  ultimaLecturaSerial = millis();
+  Serial.print(F("Izquierdo: "));
+  Serial.print(digitalRead(SENSOR_IZQUIERDO));
+  Serial.print(F(" (linea: "));
+  Serial.print(izquierdoEnLinea ? F("SI") : F("NO"));
+  Serial.print(F(") | Derecho: "));
+  Serial.print(digitalRead(SENSOR_DERECHO));
+  Serial.print(F(" (linea: "));
+  Serial.print(derechoEnLinea ? F("SI") : F("NO"));
+  Serial.println(F(")"));
+}
+
 void setup() {
   pinMode(SENSOR_IZQUIERDO, INPUT);
   pinMode(SENSOR_DERECHO, INPUT);
@@ -77,6 +99,12 @@ void setup() {
 void loop() {
   const bool izquierdoEnLinea = estaSobreLinea(SENSOR_IZQUIERDO);
   const bool derechoEnLinea = estaSobreLinea(SENSOR_DERECHO);
+
+  if (MODO_PRUEBA_SENSORES) {
+    detenerMotores();
+    mostrarLecturasSensores(izquierdoEnLinea, derechoEnLinea);
+    return;
+  }
 
   if (izquierdoEnLinea && derechoEnLinea) {
     // Ambos sensores ven la línea: avanzar centrado.

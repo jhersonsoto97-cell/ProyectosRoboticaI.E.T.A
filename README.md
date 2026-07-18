@@ -76,10 +76,18 @@ La comunicación serial está configurada a **115200 baudios** para el monitor d
 En [`src/main.cpp`](src/main.cpp) puedes modificar:
 
 - `LINEA_ES_LOW`: polaridad de detección de los sensores.
+- `MODO_PRUEBA_SENSORES`: ponlo en `true` para detener los motores y revisar las lecturas en el Monitor Serial a `115200` baudios.
 - `VELOCIDAD_BASE`: velocidad normal del carro (`0` a `255`).
 - `VELOCIDAD_GIRO`: velocidad de la rueda interna durante una corrección.
 
 Este chasis tiene ambos motores montados en sentido inverso; el código ya invierte su dirección para que el carro avance. Si en otro chasis un motor gira al revés, intercambia sus dos cables en el L298N o invierte los niveles de dirección correspondientes en el código.
+
+### Prueba de sensores
+
+1. Cambia `MODO_PRUEBA_SENSORES` a `true` en `src/main.cpp` y carga el programa.
+2. Abre el **Monitor Serial** de PlatformIO a `115200` baudios.
+3. Acerca y aleja cada sensor de la línea negra. El valor `linea: SI` debe cambiar solamente cuando el sensor esté sobre ella.
+4. Si se comporta al contrario, cambia `LINEA_ES_LOW` y repite la prueba. Al terminar, devuelve `MODO_PRUEBA_SENSORES` a `false`.
 
 ## ⚠️ Seguridad eléctrica
 
