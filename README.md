@@ -13,7 +13,7 @@ Los sensores se ubican a izquierda y derecha de la línea. El Arduino lee su sal
 | Solo derecho detecta la línea | Corrige a la derecha |
 | Ninguno detecta la línea | La busca hacia el último lado detectado |
 
-> El programa asume que el módulo entrega `LOW` sobre una línea negra. Si el tuyo entrega `HIGH`, cambia `LINEA_ES_LOW` a `false` en [`src/main.cpp`](src/main.cpp).
+> En este carro, los sensores entregan `HIGH` sobre la cinta negra y `LOW` sobre la baldosa; por eso `LINEA_ES_LOW` está configurado como `false` en [`src/main.cpp`](src/main.cpp).
 
 ## 🧰 Componentes
 

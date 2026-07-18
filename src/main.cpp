@@ -24,9 +24,9 @@ const uint8_t ENB = 8;
 const uint8_t IN3 = 9;
 const uint8_t IN4 = 10;
 
-// La mayoría de módulos IR digitales entregan LOW sobre línea negra.
-// Cámbielo a HIGH si sus sensores leen HIGH sobre la línea negra.
-const bool LINEA_ES_LOW = true;
+// En este carro los sensores entregan HIGH sobre la cinta negra y LOW sobre
+// la baldosa. Cambie este valor si se reemplazan los sensores.
+const bool LINEA_ES_LOW = false;
 
 // Actívalo temporalmente para comprobar sensores en el Monitor Serial.
 // En este modo los motores permanecen detenidos.
