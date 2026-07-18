@@ -88,3 +88,5 @@ No alimentes los motores desde el pin `5V` del Arduino. Utiliza una fuente aprop
 ---
 
 Proyecto para fines educativos de robótica. 🤖
+
+**Docente:** Yerson Soto
