@@ -79,7 +79,7 @@ En [`src/main.cpp`](src/main.cpp) puedes modificar:
 - `VELOCIDAD_BASE`: velocidad normal del carro (`0` a `255`).
 - `VELOCIDAD_GIRO`: velocidad de la rueda interna durante una corrección.
 
-Si un motor gira al revés, intercambia sus dos cables en el L298N o invierte los niveles de dirección correspondientes en el código.
+Este chasis tiene ambos motores montados en sentido inverso; el código ya invierte su dirección para que el carro avance. Si en otro chasis un motor gira al revés, intercambia sus dos cables en el L298N o invierte los niveles de dirección correspondientes en el código.
 
 ## ⚠️ Seguridad eléctrica
 

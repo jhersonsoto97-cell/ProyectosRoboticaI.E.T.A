@@ -39,10 +39,12 @@ bool estaSobreLinea(uint8_t pin) {
 
 void moverMotores(uint8_t velocidadIzq, uint8_t velocidadDer) {
   // Ambos motores hacia adelante.
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, HIGH);
-  digitalWrite(IN4, LOW);
+  // El chasis tiene los motores montados en sentido inverso, por eso la
+  // dirección eléctrica de avance es INx1=LOW e INx2=HIGH.
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
   analogWrite(ENA, velocidadIzq);
   analogWrite(ENB, velocidadDer);
 }
