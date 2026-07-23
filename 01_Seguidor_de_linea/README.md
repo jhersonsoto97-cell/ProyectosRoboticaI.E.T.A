@@ -1,5 +1,9 @@
 # 🚗 Seguidor de línea · Arduino Mega
 
+<p align="center">
+  <img src="docs/carrito.jpg" alt="Carro seguidor de línea con Arduino Mega y sensores IR" width="360">
+</p>
+
 Proyecto educativo de un carro móvil que sigue una línea negra usando **dos sensores infrarrojos digitales** y un controlador de motores **L298N**. El firmware está preparado para compilarse y cargarse con **PlatformIO** en un Arduino Mega 2560.
 
 ## ✨ Funcionamiento
