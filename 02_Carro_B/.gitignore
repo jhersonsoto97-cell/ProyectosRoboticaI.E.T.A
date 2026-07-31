@@ -1,0 +1,5 @@
+# Archivos generados automaticamente por PlatformIO.
+.pio/
+
+# Archivos locales de VS Code que no es necesario compartir.
+.vscode/*.log
