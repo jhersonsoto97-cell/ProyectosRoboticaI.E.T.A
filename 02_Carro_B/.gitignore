@@ -3,3 +3,7 @@
 
 # Archivos locales de VS Code que no es necesario compartir.
 .vscode/*.log
+
+# Cache de Python del simulador.
+__pycache__/
+*.pyc
