@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema minimo sin ActionBar: toda la interfaz la dibuja Compose. -->
+    <style name="Theme.SmartCar" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF05070F</item>
+        <item name="android:statusBarColor">#FF05070F</item>
+        <item name="android:navigationBarColor">#FF05070F</item>
+    </style>
+</resources>
