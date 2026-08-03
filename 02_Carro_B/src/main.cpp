@@ -87,6 +87,8 @@ void procesarCaracter(char entrante);
 void procesarPaqueteAnalogico(char *texto);
 void procesarComandoDiscreto(char comando);
 void ejecutarPruebaDeSentido();
+void probarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
+                 int16_t potencia, bool invertir);
 void frenar();
 
 void setup() {
@@ -248,9 +250,12 @@ void procesarComandoDiscreto(char comando) {
 }
 
 /*
-  Mueve una rueda a la vez para poder observar su sentido real sin que la otra
-  enmascare el resultado. Con las dos girando a la vez es imposible distinguir un
-  motor invertido de un giro pedido a proposito.
+  Mueve una rueda a la vez, en un solo sentido a la vez.
+
+  Se prueban las cuatro combinaciones por separado porque cada una usa una mitad
+  distinta del puente H: si una sola falla, el problema no es el codigo sino esa
+  mitad del driver, su cable de direccion o una escobilla del motor. Con las dos
+  ruedas girando juntas ese detalle queda invisible.
 
   Levantar el carro antes de ejecutarla: se mueve solo durante unos segundos.
 */
@@ -259,18 +264,22 @@ void ejecutarPruebaDeSentido() {
 
   Serial.println(F("PRUEBA DE SENTIDO. Levanta el carro para ver girar las ruedas."));
 
-  Serial.println(F("  1/2 rueda IZQUIERDA debe girar hacia ADELANTE"));
-  aplicarCanal(PIN_ENA, PIN_IN1, PIN_IN2, potencia, INVERTIR_IZQUIERDA);
-  delay(2000);
-  aplicarCanal(PIN_ENA, PIN_IN1, PIN_IN2, 0, INVERTIR_IZQUIERDA);
-  delay(700);
+  Serial.print(F("  1/4 IZQUIERDA hacia ADELANTE"));
+  probarCanal(PIN_ENA, PIN_IN1, PIN_IN2, potencia, INVERTIR_IZQUIERDA);
 
-  Serial.println(F("  2/2 rueda DERECHA debe girar hacia ADELANTE"));
-  aplicarCanal(PIN_ENB, PIN_IN3, PIN_IN4, potencia, INVERTIR_DERECHA);
-  delay(2000);
-  aplicarCanal(PIN_ENB, PIN_IN3, PIN_IN4, 0, INVERTIR_DERECHA);
+  Serial.print(F("  2/4 IZQUIERDA hacia ATRAS   "));
+  probarCanal(PIN_ENA, PIN_IN1, PIN_IN2, -potencia, INVERTIR_IZQUIERDA);
 
-  Serial.println(F("FIN. Si una giro al reves, cambia su INVERTIR_* en src/main.cpp."));
+  Serial.print(F("  3/4 DERECHA hacia ADELANTE  "));
+  probarCanal(PIN_ENB, PIN_IN3, PIN_IN4, potencia, INVERTIR_DERECHA);
+
+  Serial.print(F("  4/4 DERECHA hacia ATRAS     "));
+  probarCanal(PIN_ENB, PIN_IN3, PIN_IN4, -potencia, INVERTIR_DERECHA);
+
+  Serial.println(F("FIN."));
+  Serial.println(F("  Si una rueda giro al reves en ambas fases: cambia su INVERTIR_*."));
+  Serial.println(F("  Si una rueda solo giro en una fase: revisa el pin de direccion que"));
+  Serial.println(F("  esa fase pone en HIGH, su cable al L298N, y esa mitad del puente."));
 
   // Durante la prueba el mando siguio transmitiendo. Descartar lo acumulado evita que
   // el carro arranque de golpe con una posicion de joystick ya vieja.
@@ -280,6 +289,30 @@ void ejecutarPruebaDeSentido() {
   largoBuffer = 0;
 
   frenar();
+}
+
+/*
+  Una fase de la prueba: gira, se detiene y deja una pausa para observar.
+
+  Informa los niveles reales que quedan en los pines de direccion, calculados y no
+  escritos a mano, para que el mensaje siga siendo cierto si se cambia un INVERTIR_*.
+  Con esos niveles se puede medir directamente el pin con un multimetro y saber si el
+  problema esta antes o despues del Arduino.
+*/
+void probarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
+                 int16_t potencia, bool invertir) {
+  const int16_t fisica = invertir ? static_cast<int16_t>(-potencia) : potencia;
+
+  Serial.print(F("  ->  D"));
+  Serial.print(pinDirectoA);
+  Serial.print(fisica > 0 ? F("=HIGH  D") : F("=LOW   D"));
+  Serial.print(pinDirectoB);
+  Serial.println(fisica > 0 ? F("=LOW") : F("=HIGH"));
+
+  aplicarCanal(pinEnable, pinDirectoA, pinDirectoB, potencia, invertir);
+  delay(2000);
+  aplicarCanal(pinEnable, pinDirectoA, pinDirectoB, 0, invertir);
+  delay(900);
 }
 
 void frenar() {
