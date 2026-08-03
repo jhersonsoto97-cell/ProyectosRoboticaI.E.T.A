@@ -9,8 +9,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.InputStream
-import java.io.OutputStream
 
 /** Estados posibles del enlace con el carro. */
 enum class LinkState { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
@@ -18,19 +16,14 @@ enum class LinkState { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 /**
  * Enlace de comandos hacia el carro.
  *
- * El medio fisico cambia (RFCOMM sobre Bluetooth con el HC-05 real, TCP contra el
- * simulador del PC) pero el trafico es identico: tramas de texto que salen y lineas de
- * telemetria que entran. Toda esa mecanica vive aqui una sola vez; cada subclase solo
- * aporta como se abre y se cierra su socket.
+ * El medio cambia por completo entre transportes: RFCOMM sobre Bluetooth Classic,
+ * caracteristicas GATT sobre Bluetooth LE, o un socket TCP contra el simulador. Lo que
+ * no cambia es el trafico: salen tramas de texto y entran lineas de telemetria.
+ *
+ * Aqui vive esa parte comun una sola vez, para que un transporte no pueda comportarse
+ * distinto de otro y volver enganosas las pruebas hechas sobre uno solo.
  */
 abstract class CarLink(protected val scope: CoroutineScope) {
-
-    /** Par de flujos ya abiertos mas el nombre legible del extremo remoto. */
-    protected data class Endpoint(
-        val name: String,
-        val input: InputStream,
-        val output: OutputStream
-    )
 
     private val _state = MutableStateFlow(LinkState.DISCONNECTED)
     val state: StateFlow<LinkState> = _state.asStateFlow()
@@ -45,24 +38,29 @@ abstract class CarLink(protected val scope: CoroutineScope) {
     private val _telemetry = MutableStateFlow("")
     val telemetry: StateFlow<String> = _telemetry.asStateFlow()
 
-    private var input: InputStream? = null
-    private var output: OutputStream? = null
     private var writerJob: Job? = null
-    private var readerJob: Job? = null
 
     // CONFLATED a proposito: si el medio se atasca preferimos descartar tramas viejas y
     // mandar la posicion actual del joystick. En control en tiempo real un dato viejo es
     // peor que ningun dato, porque encolar produce un mando con retraso creciente.
     private var outbox = Channel<String>(Channel.CONFLATED)
 
-    /** Abre el medio. Se invoca siempre en Dispatchers.IO y puede lanzar excepciones. */
-    protected abstract fun openEndpoint(): Endpoint
+    /** Abre el medio y devuelve el nombre legible del extremo. Bloquea; corre en IO. */
+    protected abstract fun openTransport(): String
 
-    /** Libera el socket propio de cada implementacion. */
-    protected abstract fun closeEndpoint()
+    /** Envia una trama. Bloquea hasta que el medio la acepte; corre en IO. */
+    protected abstract fun writeFrame(frame: String)
+
+    /** Libera el recurso propio de cada transporte. */
+    protected abstract fun closeTransport()
 
     protected fun reportError(message: String) {
         _lastError.value = message
+    }
+
+    /** Las subclases publican aqui cada linea completa que llega del carro. */
+    protected fun publishTelemetry(line: String) {
+        _telemetry.value = line
     }
 
     protected fun beginConnection() {
@@ -73,16 +71,11 @@ abstract class CarLink(protected val scope: CoroutineScope) {
 
         scope.launch(Dispatchers.IO) {
             try {
-                val endpoint = openEndpoint()
-                input = endpoint.input
-                output = endpoint.output
+                val name = openTransport()
                 outbox = Channel(Channel.CONFLATED)
-
-                _endpointName.value = endpoint.name
+                _endpointName.value = name
                 _state.value = LinkState.CONNECTED
-
                 startWriter()
-                startReader()
             } catch (error: Exception) {
                 teardown()
                 _lastError.value = error.message ?: "No se pudo conectar"
@@ -105,61 +98,29 @@ abstract class CarLink(protected val scope: CoroutineScope) {
         outbox.trySend(frame)
     }
 
-    private fun startWriter() {
-        writerJob?.cancel()
-        writerJob = scope.launch(Dispatchers.IO) {
-            try {
-                while (isActive) {
-                    val frame = outbox.receive()
-                    output?.write(frame.toByteArray(Charsets.US_ASCII))
-                    output?.flush()
-                }
-            } catch (error: Exception) {
-                onLinkLost(error)
-            }
-        }
-    }
-
-    private fun startReader() {
-        readerJob?.cancel()
-        readerJob = scope.launch(Dispatchers.IO) {
-            val buffer = ByteArray(256)
-            val line = StringBuilder()
-            try {
-                while (isActive) {
-                    val read = input?.read(buffer) ?: break
-                    if (read <= 0) continue
-                    for (index in 0 until read) {
-                        val character = buffer[index].toInt().toChar()
-                        if (character == '\n') {
-                            _telemetry.value = line.toString().trim()
-                            line.setLength(0)
-                        } else if (character != '\r' && line.length < 120) {
-                            line.append(character)
-                        }
-                    }
-                }
-            } catch (error: Exception) {
-                onLinkLost(error)
-            }
-        }
-    }
-
-    private fun onLinkLost(error: Exception) {
+    protected fun onLinkLost(error: Exception) {
         if (_state.value != LinkState.CONNECTED) return
         _lastError.value = error.message ?: "Enlace interrumpido"
         _state.value = LinkState.ERROR
         teardown()
     }
 
+    private fun startWriter() {
+        writerJob?.cancel()
+        writerJob = scope.launch(Dispatchers.IO) {
+            try {
+                while (isActive) {
+                    writeFrame(outbox.receive())
+                }
+            } catch (error: Exception) {
+                onLinkLost(error)
+            }
+        }
+    }
+
     private fun teardown() {
         writerJob?.cancel()
-        readerJob?.cancel()
         outbox.close()
-        runCatching { input?.close() }
-        runCatching { output?.close() }
-        runCatching { closeEndpoint() }
-        input = null
-        output = null
+        runCatching { closeTransport() }
     }
 }

@@ -11,13 +11,20 @@ import androidx.lifecycle.viewModelScope
 import com.ieta.smartcar.control.DriveMixer
 import com.ieta.smartcar.control.DriveMode
 import com.ieta.smartcar.control.WheelPower
+import com.ieta.smartcar.link.BleClient
+import com.ieta.smartcar.link.BtDevice
 import com.ieta.smartcar.link.CarLink
+import com.ieta.smartcar.link.DeviceScanner
 import com.ieta.smartcar.link.LinkState
+import com.ieta.smartcar.link.Radio
 import com.ieta.smartcar.link.SppClient
 import com.ieta.smartcar.link.TcpClient
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Dueno del estado de control. Mantiene un lazo fijo de 20 Hz que transmite la posicion
@@ -29,11 +36,16 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     private val adapter = (application.getSystemService(Context.BLUETOOTH_SERVICE)
             as BluetoothManager).adapter
 
-    val spp = SppClient(application, adapter, viewModelScope)
+    val scanner = DeviceScanner(application, adapter, viewModelScope)
+
+    val spp = SppClient(adapter, viewModelScope)
+    val ble = BleClient(application, adapter, viewModelScope)
     val tcp = TcpClient(viewModelScope)
 
-    /** Enlace en uso. Ambos hablan el mismo protocolo, solo cambia el medio fisico. */
+    /** Enlace en uso. Los tres hablan el mismo protocolo, solo cambia el medio. */
     var link: CarLink by mutableStateOf(spp); private set
+
+    private var connectJob: Job? = null
 
     var leftStickX by mutableStateOf(0f); private set
     var leftStickY by mutableStateOf(0f); private set
@@ -86,25 +98,58 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         emergencyStop = true
     }
 
-    fun startBluetoothScan() {
-        spp.startScan()
-    }
+    fun startScan() = scanner.start()
 
-    fun stopBluetoothScan() {
-        spp.stopScan()
-    }
+    fun stopScan() = scanner.stop()
 
-    fun connectBluetooth(address: String) {
-        switchTo(spp)
-        spp.connectTo(address)
+    /**
+     * Conecta eligiendo el transporte segun la radio que anuncia el modulo, y si falla
+     * prueba el otro.
+     *
+     * El tipo declarado no siempre es confiable: un modulo nunca visto por el sistema
+     * suele reportar UNKNOWN, y varios clones BLE se anuncian como duales. Probar la
+     * alternativa cuesta unos segundos y evita que el usuario tenga que saber que
+     * tecnologia usa su modulo para poder manejar el carro.
+     */
+    fun connectBluetooth(device: BtDevice) {
+        scanner.stop()
+        connectJob?.cancel()
+
+        connectJob = viewModelScope.launch {
+            val orden = when (device.radio) {
+                Radio.LE -> listOf(ble, spp)
+                Radio.CLASSIC -> listOf(spp)
+                else -> listOf(spp, ble)
+            }
+
+            for ((indice, candidato) in orden.withIndex()) {
+                switchTo(candidato)
+                when (candidato) {
+                    is BleClient -> candidato.connectTo(device.address)
+                    is SppClient -> candidato.connectTo(device.address)
+                    else -> continue
+                }
+
+                val resultado = withTimeoutOrNull(CONNECT_WINDOW_MS) {
+                    candidato.state.first { it == LinkState.CONNECTED || it == LinkState.ERROR }
+                }
+
+                if (resultado == LinkState.CONNECTED) return@launch
+                if (indice < orden.lastIndex) candidato.disconnect()
+            }
+        }
     }
 
     fun connectSimulator(endpoint: String) {
+        connectJob?.cancel()
         switchTo(tcp)
         tcp.connectTo(endpoint)
     }
 
-    fun disconnect() = link.disconnect()
+    fun disconnect() {
+        connectJob?.cancel()
+        link.disconnect()
+    }
 
     private fun switchTo(target: CarLink) {
         if (link !== target) link.disconnect()
@@ -126,7 +171,8 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
     override fun onCleared() {
         super.onCleared()
-        spp.stopScan()   // deja registrado el BroadcastReceiver si no se cancela
+        scanner.stop()   // deja registrado el BroadcastReceiver si no se cancela
+        connectJob?.cancel()
         link.disconnect()
     }
 
@@ -134,5 +180,8 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         /** 20 Hz: holgado frente al failsafe de 400 ms y solo ~220 B/s sobre 9600 baudios. */
         const val FRAME_PERIOD_MS = 50L
         val SPEED_CAPS = floatArrayOf(0.4f, 0.7f, 1.0f)
+
+        /** Margen antes de descartar un transporte y probar el otro. */
+        const val CONNECT_WINDOW_MS = 25_000L
     }
 }

@@ -47,6 +47,7 @@ import com.ieta.smartcar.ControllerViewModel
 import com.ieta.smartcar.control.DriveMode
 import com.ieta.smartcar.link.BtDevice
 import com.ieta.smartcar.link.LinkState
+import com.ieta.smartcar.link.Radio
 import com.ieta.smartcar.link.TcpClient
 import com.ieta.smartcar.ui.theme.Neon
 
@@ -58,8 +59,9 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
     val lastError by link.lastError.collectAsState()
     val telemetry by link.telemetry.collectAsState()
 
-    val devices by viewModel.spp.devices.collectAsState()
-    val scanning by viewModel.spp.scanning.collectAsState()
+    val devices by viewModel.scanner.devices.collectAsState()
+    val scanning by viewModel.scanner.scanning.collectAsState()
+    val scanError by viewModel.scanner.lastError.collectAsState()
 
     var showDevices by remember { mutableStateOf(false) }
 
@@ -147,17 +149,18 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
     if (showDevices) {
         // Al abrir la ventana se busca solo. Obligar a tocar "buscar" es un paso extra
         // que nadie quiere dar cuando lo unico que busca es su carro.
-        LaunchedEffect(Unit) { viewModel.startBluetoothScan() }
-        DisposableEffect(Unit) { onDispose { viewModel.stopBluetoothScan() } }
+        LaunchedEffect(Unit) { viewModel.startScan() }
+        DisposableEffect(Unit) { onDispose { viewModel.stopScan() } }
 
         ConnectionDialog(
             devices = devices,
             scanning = scanning,
-            bluetoothReady = viewModel.spp.isBluetoothReady,
-            error = if (linkState == LinkState.ERROR) lastError else null,
-            onRescan = { viewModel.startBluetoothScan() },
+            bluetoothReady = viewModel.scanner.isBluetoothReady,
+            error = if (linkState == LinkState.ERROR) lastError else scanError,
+            errorTitle = if (linkState == LinkState.ERROR) "NO SE PUDO CONECTAR" else "AVISO",
+            onRescan = { viewModel.startScan() },
             onPickDevice = {
-                viewModel.connectBluetooth(it.address)
+                viewModel.connectBluetooth(it)
                 showDevices = false
             },
             onPickSimulator = {
@@ -325,6 +328,7 @@ private fun ConnectionDialog(
     scanning: Boolean,
     bluetoothReady: Boolean,
     error: String?,
+    errorTitle: String,
     onRescan: () -> Unit,
     onPickDevice: (BtDevice) -> Unit,
     onPickSimulator: (String) -> Unit,
@@ -356,7 +360,7 @@ private fun ConnectionDialog(
                             .padding(10.dp)
                     ) {
                         Text(
-                            text = "NO SE PUDO CONECTAR",
+                            text = errorTitle,
                             color = Neon.Danger,
                             fontSize = 10.sp,
                             letterSpacing = 1.sp,
@@ -491,7 +495,22 @@ private fun DeviceRow(device: BtDevice, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(device.name, color = Neon.TextPrimary, fontSize = 14.sp)
-            Text(device.address, color = Neon.TextMuted, fontSize = 11.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(device.address, color = Neon.TextMuted, fontSize = 11.sp)
+                // La radio decide el protocolo. Un modulo rotulado HC-05 que aparezca
+                // como BLE es un clon y no habla RFCOMM; mostrarlo evita media hora de
+                // pelea contra el transporte equivocado.
+                radioLabel(device.radio)?.let { etiqueta ->
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = etiqueta,
+                        color = if (device.radio == Radio.LE) Neon.Warning else Neon.Blue,
+                        fontSize = 9.sp,
+                        letterSpacing = 0.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
 
         if (device.bonded) {
@@ -527,6 +546,13 @@ private fun SectionLabel(text: String) {
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(bottom = 6.dp)
     )
+}
+
+private fun radioLabel(radio: Radio): String? = when (radio) {
+    Radio.LE -> "BLE"
+    Radio.CLASSIC -> "CLASSIC"
+    Radio.DUAL -> "DUAL"
+    Radio.UNKNOWN -> null
 }
 
 private fun statusText(state: LinkState, deviceName: String?): String = when (state) {

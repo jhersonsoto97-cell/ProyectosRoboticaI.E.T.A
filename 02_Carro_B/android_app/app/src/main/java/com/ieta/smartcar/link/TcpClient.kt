@@ -13,7 +13,7 @@ import java.net.Socket
  * sobre TCP, de modo que el simulador ve exactamente las mismas tramas que veria el
  * Arduino y la logica de control se valida sin depender del hardware.
  */
-class TcpClient(scope: CoroutineScope) : CarLink(scope) {
+class TcpClient(scope: CoroutineScope) : StreamCarLink(scope) {
 
     private var host: String = DEFAULT_HOST
     private var port: Int = DEFAULT_PORT
@@ -26,7 +26,7 @@ class TcpClient(scope: CoroutineScope) : CarLink(scope) {
         beginConnection()
     }
 
-    override fun openEndpoint(): Endpoint {
+    override fun openStreams(): Endpoint {
         val opened = Socket()
         // TCP_NODELAY apaga el algoritmo de Nagle. Sin esto el sistema agruparia las
         // tramas pequenas para ahorrar cabeceras y el mando respondería con retraso.
@@ -43,7 +43,7 @@ class TcpClient(scope: CoroutineScope) : CarLink(scope) {
         )
     }
 
-    override fun closeEndpoint() {
+    override fun closeSocket() {
         socket?.close()
         socket = null
     }
