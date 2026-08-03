@@ -10,6 +10,7 @@
   Comandos discretos heredados (monitor serie o apps antiguas):
     A = avanzar, R = retroceder, I = izquierda, D = derecha, S = detener.
     Son de enclavamiento: quedan fijos hasta el siguiente comando, sin failsafe.
+    T = prueba de sentido: mueve una rueda a la vez para calibrar INVERTIR_*.
 
   Seguridad y calidad de movimiento:
     FAILSAFE_MS  -> si el enlace analogico se corta, el carro frena solo.
@@ -43,6 +44,15 @@ const uint8_t PIN_IN4 = 6;   // Segunda entrada de direccion del motor derecho.
 HardwareSerial &bluetooth = Serial1;
 const unsigned long BAUD_BLUETOOTH = 9600;  // Baudrate por defecto de la mayoria de HC-05.
 
+// ---------- Correccion de sentido de giro ----------
+// Los dos motores van montados en espejo, uno a cada lado del chasis. Si se cablean
+// simetricamente al L298N, uno gira al reves por pura geometria: pedir "adelante"
+// termina haciendo girar el carro sobre su eje en vez de avanzar.
+// Poner en true el lado que gire invertido. Enviar 'T' por el monitor serie ejecuta
+// la prueba de sentido rueda por rueda para saber cual corregir.
+const bool INVERTIR_IZQUIERDA = true;
+const bool INVERTIR_DERECHA = false;
+
 // ---------- Parametros de control ----------
 const int16_t PWM_MIN = 60;              // Piso de torque medido: abajo de esto el motor no rompe inercia.
 const int16_t PWM_MAX = 255;             // Techo del analogWrite de 8 bits.
@@ -71,10 +81,12 @@ bool capturandoPaquete = false;
 void configurarPines();
 int16_t escalarPotencia(int16_t crudo);
 int16_t acercarConRampa(int16_t actual, int16_t objetivo);
-void aplicarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB, int16_t potencia);
+void aplicarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
+                  int16_t potencia, bool invertir);
 void procesarCaracter(char entrante);
 void procesarPaqueteAnalogico(char *texto);
 void procesarComandoDiscreto(char comando);
+void ejecutarPruebaDeSentido();
 void frenar();
 
 void setup() {
@@ -109,8 +121,8 @@ void loop() {
     marcaUltimoTick = ahora;
     actualIzquierda = acercarConRampa(actualIzquierda, objetivoIzquierda);
     actualDerecha = acercarConRampa(actualDerecha, objetivoDerecha);
-    aplicarCanal(PIN_ENA, PIN_IN1, PIN_IN2, actualIzquierda);
-    aplicarCanal(PIN_ENB, PIN_IN3, PIN_IN4, actualDerecha);
+    aplicarCanal(PIN_ENA, PIN_IN1, PIN_IN2, actualIzquierda, INVERTIR_IZQUIERDA);
+    aplicarCanal(PIN_ENB, PIN_IN3, PIN_IN4, actualDerecha, INVERTIR_DERECHA);
   }
 }
 
@@ -148,7 +160,14 @@ int16_t acercarConRampa(int16_t actual, int16_t objetivo) {
   return objetivo;
 }
 
-void aplicarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB, int16_t potencia) {
+void aplicarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
+                  int16_t potencia, bool invertir) {
+  // La correccion se aplica al final, sobre la salida fisica. Asi el resto del programa
+  // razona siempre en sentido logico y la telemetria no miente sobre lo que se pidio.
+  if (invertir) {
+    potencia = -potencia;
+  }
+
   if (potencia > 0) {
     digitalWrite(pinDirectoA, HIGH);      // Sentido adelante de este canal.
     digitalWrite(pinDirectoB, LOW);
@@ -217,8 +236,9 @@ void procesarComandoDiscreto(char comando) {
     case 'I': objetivoIzquierda = -potencia; objetivoDerecha =  potencia; break;
     case 'D': objetivoIzquierda =  potencia; objetivoDerecha = -potencia; break;
     case 'S': objetivoIzquierda =  0;        objetivoDerecha =  0;        break;
+    case 'T': ejecutarPruebaDeSentido();                                  return;
     default:
-      Serial.println(F("Comando no valido. Use A, R, I, D, S o el paquete <L,R>."));
+      Serial.println(F("Comando no valido. Use A, R, I, D, S, T o el paquete <L,R>."));
       return;
   }
 
@@ -227,11 +247,46 @@ void procesarComandoDiscreto(char comando) {
   Serial.println(comando);
 }
 
+/*
+  Mueve una rueda a la vez para poder observar su sentido real sin que la otra
+  enmascare el resultado. Con las dos girando a la vez es imposible distinguir un
+  motor invertido de un giro pedido a proposito.
+
+  Levantar el carro antes de ejecutarla: se mueve solo durante unos segundos.
+*/
+void ejecutarPruebaDeSentido() {
+  const int16_t potencia = escalarPotencia(150);
+
+  Serial.println(F("PRUEBA DE SENTIDO. Levanta el carro para ver girar las ruedas."));
+
+  Serial.println(F("  1/2 rueda IZQUIERDA debe girar hacia ADELANTE"));
+  aplicarCanal(PIN_ENA, PIN_IN1, PIN_IN2, potencia, INVERTIR_IZQUIERDA);
+  delay(2000);
+  aplicarCanal(PIN_ENA, PIN_IN1, PIN_IN2, 0, INVERTIR_IZQUIERDA);
+  delay(700);
+
+  Serial.println(F("  2/2 rueda DERECHA debe girar hacia ADELANTE"));
+  aplicarCanal(PIN_ENB, PIN_IN3, PIN_IN4, potencia, INVERTIR_DERECHA);
+  delay(2000);
+  aplicarCanal(PIN_ENB, PIN_IN3, PIN_IN4, 0, INVERTIR_DERECHA);
+
+  Serial.println(F("FIN. Si una giro al reves, cambia su INVERTIR_* en src/main.cpp."));
+
+  // Durante la prueba el mando siguio transmitiendo. Descartar lo acumulado evita que
+  // el carro arranque de golpe con una posicion de joystick ya vieja.
+  while (bluetooth.available() > 0) bluetooth.read();
+  while (Serial.available() > 0) Serial.read();
+  capturandoPaquete = false;
+  largoBuffer = 0;
+
+  frenar();
+}
+
 void frenar() {
   objetivoIzquierda = 0;
   objetivoDerecha = 0;
   actualIzquierda = 0;
   actualDerecha = 0;
-  aplicarCanal(PIN_ENA, PIN_IN1, PIN_IN2, 0);
-  aplicarCanal(PIN_ENB, PIN_IN3, PIN_IN4, 0);
+  aplicarCanal(PIN_ENA, PIN_IN1, PIN_IN2, 0, INVERTIR_IZQUIERDA);
+  aplicarCanal(PIN_ENB, PIN_IN3, PIN_IN4, 0, INVERTIR_DERECHA);
 }

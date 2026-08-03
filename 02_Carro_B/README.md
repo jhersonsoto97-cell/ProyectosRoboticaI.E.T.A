@@ -73,9 +73,37 @@ transmite 20 paquetes por segundo, cambien o no los joysticks.
 | `I` | Girar a la izquierda |
 | `D` | Girar a la derecha |
 | `S` | Detener |
+| `T` | Prueba de sentido: mueve una rueda a la vez para calibrar `INVERTIR_*` |
 
-Funcionan tambien escribiendolos en el Monitor Serie del USB, sin necesidad del HC-05.
+Funcionan tambien escribiendolos en el Monitor Serie del USB, sin necesidad del modulo.
 Son de enclavamiento: quedan fijos hasta el siguiente comando.
+
+## Calibracion del sentido de giro
+
+Los dos motores van montados en espejo, uno a cada lado del chasis. Si se cablean
+simetricamente al L298N **uno gira al reves por geometria**, no por error de armado:
+pedir "adelante" hace que el carro gire sobre su eje en vez de avanzar.
+
+Se corrige con dos constantes en `src/main.cpp`:
+
+```cpp
+const bool INVERTIR_IZQUIERDA = true;
+const bool INVERTIR_DERECHA = false;
+```
+
+Para saber cual poner en `true`, enviar **`T`** por el Monitor Serie (115200):
+
+1. Levantar el carro para que las ruedas giren libres
+2. Escribir `T` y enviar
+3. Gira **solo la rueda izquierda**, que debe ir hacia adelante
+4. Pausa, y gira **solo la derecha**, que tambien debe ir hacia adelante
+5. La que gire al reves es la que necesita su `INVERTIR_*` en `true`
+
+Se prueba una rueda a la vez a proposito: con las dos girando es imposible distinguir
+un motor invertido de un giro pedido a proposito.
+
+La alternativa por hardware es intercambiar los dos cables de ese motor en el borne del
+L298N. Da el mismo resultado; la constante evita tener que desarmar.
 
 ## Parametros de control
 
