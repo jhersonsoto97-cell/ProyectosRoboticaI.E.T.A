@@ -10,7 +10,7 @@
   Comandos discretos heredados (monitor serie o apps antiguas):
     A = avanzar, R = retroceder, I = izquierda, D = derecha, S = detener.
     Son de enclavamiento: quedan fijos hasta el siguiente comando, sin failsafe.
-    T = prueba de sentido: mueve una rueda a la vez para calibrar INVERTIR_*.
+    T = prueba de giro: cada rueda y cada sentido por separado.
 
   Seguridad y calidad de movimiento:
     FAILSAFE_MS  -> si el enlace analogico se corta, el carro frena solo.
@@ -314,7 +314,7 @@ void ejecutarPruebaDeSentido() {
 }
 
 /*
-  Una fase de la prueba: gira, se detiene y deja una pausa para observar.
+  Una fase de la prueba de giro: gira, se detiene y deja una pausa para observar.
 
   Informa los niveles reales que quedan en los pines de direccion, calculados y no
   escritos a mano, para que el mensaje siga siendo cierto si se cambia un INVERTIR_*.
