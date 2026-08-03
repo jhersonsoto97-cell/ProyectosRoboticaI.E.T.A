@@ -1,4 +1,4 @@
-/*
+/*NUEVO
   Smart Car Bluetooth - PlatformIO
   Arduino Mega 2560 + L298N + HC-05
 
@@ -60,6 +60,12 @@ const int16_t RAMPA_PASO = 12;           // Cambio maximo de PWM por tick: 0 a 2
 const unsigned long TICK_MS = 10;        // Periodo del lazo de rampa; fija la pendiente real.
 const unsigned long FAILSAFE_MS = 400;   // Sin paquete analogico por mas de esto, se frena.
 
+// Al encender, el modulo Bluetooth emite basura por Serial1 mientras su UART estabiliza.
+// Un solo byte espurio interpretado como comando discreto bastaria para que el carro
+// arranque solo. Durante esta ventana se ignoran las letras sueltas; los paquetes <L,R>
+// si se aceptan, porque su delimitacion los hace practicamente inmunes al ruido.
+const unsigned long SILENCIO_ARRANQUE_MS = 1500;
+
 // Potencia objetivo pedida por el enlace, ya escalada al rango util del motor.
 int16_t objetivoIzquierda = 0;
 int16_t objetivoDerecha = 0;
@@ -83,9 +89,9 @@ int16_t escalarPotencia(int16_t crudo);
 int16_t acercarConRampa(int16_t actual, int16_t objetivo);
 void aplicarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
                   int16_t potencia, bool invertir);
-void procesarCaracter(char entrante);
+void procesarCaracter(char entrante, char origen);
 void procesarPaqueteAnalogico(char *texto);
-void procesarComandoDiscreto(char comando);
+void procesarComandoDiscreto(char comando, char origen);
 void ejecutarPruebaDeSentido();
 void probarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
                  int16_t potencia, bool invertir);
@@ -96,16 +102,16 @@ void setup() {
   bluetooth.begin(BAUD_BLUETOOTH);       // Habilita el puerto hardware conectado al HC-05.
   configurarPines();                     // Prepara todas las salidas hacia el L298N.
   frenar();                              // Mantiene el carro detenido al encender.
-  Serial.println(F("Smart Car listo. Protocolo <L,R> o comandos A/R/I/D/S."));
+  Serial.println(F("Smart Car listo. Protocolo <L,R>, comandos A/R/I/D/S, T = prueba."));
 }
 
 void loop() {
   // El HC-05 trae los paquetes de la app; el USB permite probar sin telefono.
   while (bluetooth.available() > 0) {
-    procesarCaracter(static_cast<char>(bluetooth.read()));
+    procesarCaracter(static_cast<char>(bluetooth.read()), 'B');
   }
   while (Serial.available() > 0) {
-    procesarCaracter(static_cast<char>(Serial.read()));
+    procesarCaracter(static_cast<char>(Serial.read()), 'U');
   }
 
   const unsigned long ahora = millis();
@@ -183,7 +189,7 @@ void aplicarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
   analogWrite(pinEnable, static_cast<uint8_t>(abs(potencia)));
 }
 
-void procesarCaracter(char entrante) {
+void procesarCaracter(char entrante, char origen) {
   // '<' siempre reinicia la captura: un paquete truncado nunca contamina al siguiente.
   if (entrante == '<') {
     capturandoPaquete = true;
@@ -208,7 +214,7 @@ void procesarCaracter(char entrante) {
   if (entrante == '\r' || entrante == '\n' || entrante == ' ') {
     return;
   }
-  procesarComandoDiscreto(entrante);
+  procesarComandoDiscreto(entrante, origen);
 }
 
 void procesarPaqueteAnalogico(char *texto) {
@@ -228,8 +234,19 @@ void procesarPaqueteAnalogico(char *texto) {
   enlaceAnalogicoVivo = true;
 }
 
-void procesarComandoDiscreto(char comando) {
+void procesarComandoDiscreto(char comando, char origen) {
   comando = static_cast<char>(toupper(static_cast<unsigned char>(comando)));
+
+  // Ver el origen y el valor exacto del byte ahorra media hora de dudas: distingue de
+  // inmediato lo que uno escribio por USB del ruido que el modulo emite al arrancar.
+  if (millis() < SILENCIO_ARRANQUE_MS) {
+    Serial.print(F("Ignorado en el arranque ("));
+    Serial.print(origen == 'B' ? F("BT") : F("USB"));
+    Serial.print(F("): 0x"));
+    Serial.println(static_cast<uint8_t>(comando), HEX);
+    return;
+  }
+
   const int16_t potencia = escalarPotencia(200);  // Velocidad comoda para modo discreto.
 
   switch (comando) {
@@ -240,12 +257,17 @@ void procesarComandoDiscreto(char comando) {
     case 'S': objetivoIzquierda =  0;        objetivoDerecha =  0;        break;
     case 'T': ejecutarPruebaDeSentido();                                  return;
     default:
-      Serial.println(F("Comando no valido. Use A, R, I, D, S, T o el paquete <L,R>."));
+      Serial.print(F("Comando no valido ("));
+      Serial.print(origen == 'B' ? F("BT") : F("USB"));
+      Serial.print(F("): 0x"));
+      Serial.print(static_cast<uint8_t>(comando), HEX);
+      Serial.println(F(". Use A, R, I, D, S, T o el paquete <L,R>."));
       return;
   }
 
   enlaceAnalogicoVivo = false;            // Modo enclavado: el failsafe no lo vigila.
-  Serial.print(F("Comando discreto: "));
+  Serial.print(F("Comando discreto "));
+  Serial.print(origen == 'B' ? F("(BT): ") : F("(USB): "));
   Serial.println(comando);
 }
 
