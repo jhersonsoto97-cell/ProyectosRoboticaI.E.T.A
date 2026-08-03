@@ -5,8 +5,16 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
 
-    <!-- Android 12 y superiores: permiso en tiempo de ejecucion para abrir el socket SPP. -->
+    <!-- Android 12 y superiores: permisos en tiempo de ejecucion para descubrir
+         dispositivos y para abrir el socket SPP. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Hasta Android 11 el descubrimiento Bluetooth exige permiso de ubicacion, porque
+         la lista de dispositivos cercanos permite inferir donde esta el usuario. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
 
     <!-- Solo para el transporte TCP contra el simulador del PC. -->
     <uses-permission android:name="android.permission.INTERNET" />

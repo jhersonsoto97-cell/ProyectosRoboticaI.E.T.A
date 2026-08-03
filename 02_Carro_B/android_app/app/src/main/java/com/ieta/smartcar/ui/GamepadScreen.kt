@@ -7,26 +7,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,8 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ieta.smartcar.ControllerViewModel
 import com.ieta.smartcar.control.DriveMode
+import com.ieta.smartcar.link.BtDevice
 import com.ieta.smartcar.link.LinkState
-import com.ieta.smartcar.link.PairedDevice
 import com.ieta.smartcar.link.TcpClient
 import com.ieta.smartcar.ui.theme.Neon
 
@@ -55,8 +58,10 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
     val lastError by link.lastError.collectAsState()
     val telemetry by link.telemetry.collectAsState()
 
+    val devices by viewModel.spp.devices.collectAsState()
+    val scanning by viewModel.spp.scanning.collectAsState()
+
     var showDevices by remember { mutableStateOf(false) }
-    var devices by remember { mutableStateOf(emptyList<PairedDevice>()) }
 
     Box(
         modifier = Modifier
@@ -83,10 +88,7 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
                     deviceName = deviceName,
                     leftPower = viewModel.wheelPower.left,
                     rightPower = viewModel.wheelPower.right,
-                    onSettings = {
-                        devices = viewModel.pairedDevices()
-                        showDevices = true
-                    }
+                    onSettings = { showDevices = true }
                 )
 
                 Row(
@@ -112,7 +114,6 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
                             if (linkState == LinkState.CONNECTED) {
                                 viewModel.disconnect()
                             } else {
-                                devices = viewModel.pairedDevices()
                                 showDevices = true
                             }
                         }
@@ -144,9 +145,16 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
     }
 
     if (showDevices) {
+        // Al abrir la ventana se busca solo. Obligar a tocar "buscar" es un paso extra
+        // que nadie quiere dar cuando lo unico que busca es su carro.
+        LaunchedEffect(Unit) { viewModel.startBluetoothScan() }
+        DisposableEffect(Unit) { onDispose { viewModel.stopBluetoothScan() } }
+
         ConnectionDialog(
             devices = devices,
+            scanning = scanning,
             bluetoothReady = viewModel.spp.isBluetoothReady,
+            onRescan = { viewModel.startBluetoothScan() },
             onPickDevice = {
                 viewModel.connectBluetooth(it.address)
                 showDevices = false
@@ -312,13 +320,16 @@ private fun BottomBar(
 
 @Composable
 private fun ConnectionDialog(
-    devices: List<PairedDevice>,
+    devices: List<BtDevice>,
+    scanning: Boolean,
     bluetoothReady: Boolean,
-    onPickDevice: (PairedDevice) -> Unit,
+    onRescan: () -> Unit,
+    onPickDevice: (BtDevice) -> Unit,
     onPickSimulator: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var endpoint by remember { mutableStateOf(TcpClient.DEFAULT_ENDPOINT) }
+    var showSimulator by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -327,71 +338,108 @@ private fun ConnectionDialog(
         textContentColor = Neon.TextMuted,
         title = { Text("Conectar", fontSize = 16.sp) },
         text = {
-            Column {
-                SectionLabel("SIMULADOR EN EL PC")
-
-                OutlinedTextField(
-                    value = endpoint,
-                    onValueChange = { endpoint = it },
-                    singleLine = true,
-                    label = { Text("host:puerto", fontSize = 11.sp) },
-                    textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Neon.TextPrimary,
-                        unfocusedTextColor = Neon.TextPrimary,
-                        focusedBorderColor = Neon.Cyan,
-                        unfocusedBorderColor = Neon.Outline,
-                        focusedLabelColor = Neon.Cyan,
-                        unfocusedLabelColor = Neon.TextMuted
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(
-                    text = "10.0.2.2 es el PC visto desde el emulador. Desde un telefono " +
-                        "real, usa la IP del PC en la red WiFi.",
-                    color = Neon.TextMuted,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                TextButton(
-                    onClick = { onPickSimulator(endpoint) },
-                    modifier = Modifier.fillMaxWidth()
+            // En landscape el dialogo es muy bajo. Sin scroll, la lista de dispositivos
+            // queda fuera de la pantalla y el usuario cree que la app no los encuentra.
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("CONECTAR AL SIMULADOR", color = Neon.Cyan, fontSize = 12.sp)
+                    SectionLabel("DISPOSITIVOS BLUETOOTH")
+                    if (scanning) {
+                        CircularProgressIndicator(
+                            color = Neon.Cyan,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        TextButton(
+                            onClick = onRescan,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Text("BUSCAR", color = Neon.Cyan, fontSize = 11.sp)
+                        }
+                    }
                 }
-
-                Spacer(Modifier.height(10.dp))
-                SectionLabel("HC-05 EMPAREJADO")
 
                 when {
                     !bluetoothReady -> Text(
-                        text = "Bluetooth apagado o no disponible en este dispositivo.",
+                        text = "Bluetooth apagado. Activalo desde los ajustes del telefono " +
+                            "y vuelve a abrir esta ventana.",
                         color = Neon.TextMuted,
                         fontSize = 12.sp
                     )
                     devices.isEmpty() -> Text(
-                        text = "No hay dispositivos emparejados. Empareja el HC-05 desde " +
-                            "los ajustes de Bluetooth de Android (PIN 1234 o 0000).",
+                        text = if (scanning) {
+                            "Buscando dispositivos cercanos..."
+                        } else {
+                            "No se encontro ningun dispositivo. Verifica que el carro este " +
+                                "encendido y que el LED del HC-05 parpadee."
+                        },
                         color = Neon.TextMuted,
                         fontSize = 12.sp
                     )
-                    else -> LazyColumn(modifier = Modifier.heightIn(max = 160.dp)) {
-                        items(devices) { device ->
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { onPickDevice(device) }
-                                    .padding(vertical = 10.dp, horizontal = 8.dp)
-                            ) {
-                                Text(device.name, color = Neon.TextPrimary, fontSize = 14.sp)
-                                Text(device.address, color = Neon.TextMuted, fontSize = 11.sp)
-                            }
+                    // Column y no LazyColumn: la lista es corta y anidar un contenedor
+                    // con scroll propio dentro de otro revienta la medicion de altura.
+                    else -> Column {
+                        devices.forEach { device ->
+                            DeviceRow(device) { onPickDevice(device) }
                         }
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // El simulador es una herramienta de desarrollo: se guarda detras de un
+                // toque para que no compita con el caso real de uso, que es el HC-05.
+                TextButton(
+                    onClick = { showSimulator = !showSimulator },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = if (showSimulator) {
+                            "▾  SIMULADOR EN EL PC"
+                        } else {
+                            "▸  USAR SIMULADOR EN EL PC"
+                        },
+                        color = Neon.TextMuted,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                if (showSimulator) {
+                    OutlinedTextField(
+                        value = endpoint,
+                        onValueChange = { endpoint = it },
+                        singleLine = true,
+                        label = { Text("host:puerto", fontSize = 11.sp) },
+                        textStyle = LocalTextStyle.current.copy(fontSize = 13.sp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Neon.TextPrimary,
+                            unfocusedTextColor = Neon.TextPrimary,
+                            focusedBorderColor = Neon.Cyan,
+                            unfocusedBorderColor = Neon.Outline,
+                            focusedLabelColor = Neon.Cyan,
+                            unfocusedLabelColor = Neon.TextMuted
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = "Desde un telefono real, la IP del PC en la red WiFi. " +
+                            "Desde el emulador, 10.0.2.2.",
+                        color = Neon.TextMuted,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+
+                    TextButton(
+                        onClick = { onPickSimulator(endpoint) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("CONECTAR AL SIMULADOR", color = Neon.Cyan, fontSize = 12.sp)
                     }
                 }
             }
@@ -402,6 +450,44 @@ private fun ConnectionDialog(
             }
         }
     )
+}
+
+@Composable
+private fun DeviceRow(device: BtDevice, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 9.dp, horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(device.name, color = Neon.TextPrimary, fontSize = 14.sp)
+            Text(device.address, color = Neon.TextMuted, fontSize = 11.sp)
+        }
+
+        if (device.bonded) {
+            Text(
+                text = "VINCULADO",
+                color = Neon.Ok,
+                fontSize = 9.sp,
+                letterSpacing = 1.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        // El RSSI evita el juego de adivinar cual de tres HC-05 identicos es el propio:
+        // el que este sobre la mesa marcara bastante mas que los del resto del salon.
+        device.rssi?.let { rssi ->
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = "$rssi dBm",
+                color = if (rssi > -70) Neon.Cyan else Neon.TextMuted,
+                fontSize = 10.sp
+            )
+        }
+    }
 }
 
 @Composable

@@ -13,7 +13,6 @@ import com.ieta.smartcar.control.DriveMode
 import com.ieta.smartcar.control.WheelPower
 import com.ieta.smartcar.link.CarLink
 import com.ieta.smartcar.link.LinkState
-import com.ieta.smartcar.link.PairedDevice
 import com.ieta.smartcar.link.SppClient
 import com.ieta.smartcar.link.TcpClient
 import kotlinx.coroutines.delay
@@ -30,7 +29,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     private val adapter = (application.getSystemService(Context.BLUETOOTH_SERVICE)
             as BluetoothManager).adapter
 
-    val spp = SppClient(adapter, viewModelScope)
+    val spp = SppClient(application, adapter, viewModelScope)
     val tcp = TcpClient(viewModelScope)
 
     /** Enlace en uso. Ambos hablan el mismo protocolo, solo cambia el medio fisico. */
@@ -87,7 +86,13 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         emergencyStop = true
     }
 
-    fun pairedDevices(): List<PairedDevice> = spp.pairedDevices()
+    fun startBluetoothScan() {
+        spp.startScan()
+    }
+
+    fun stopBluetoothScan() {
+        spp.stopScan()
+    }
 
     fun connectBluetooth(address: String) {
         switchTo(spp)
@@ -121,6 +126,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
     override fun onCleared() {
         super.onCleared()
+        spp.stopScan()   // deja registrado el BroadcastReceiver si no se cancela
         link.disconnect()
     }
 

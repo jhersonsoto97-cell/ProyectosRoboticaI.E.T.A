@@ -19,13 +19,17 @@ class MainActivity : ComponentActivity() {
 
     private val controller: ControllerViewModel by viewModels()
 
-    // Android 12 introdujo BLUETOOTH_CONNECT como permiso en tiempo de ejecucion.
-    // En versiones anteriores los permisos Bluetooth se conceden al instalar.
+    // Android 12 movio los permisos Bluetooth a tiempo de ejecucion. Antes de esa version
+    // el descubrimiento se apoyaba en el permiso de ubicacion, porque la lista de
+    // dispositivos cercanos permite deducir donde esta el usuario.
     private val requiredPermissions: Array<String>
         get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
+            arrayOf(
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_SCAN
+            )
         } else {
-            emptyArray()
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
         }
 
     private val permissionLauncher =
