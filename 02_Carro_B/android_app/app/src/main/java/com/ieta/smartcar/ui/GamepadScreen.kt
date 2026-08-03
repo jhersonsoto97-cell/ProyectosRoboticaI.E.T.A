@@ -154,6 +154,7 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
             devices = devices,
             scanning = scanning,
             bluetoothReady = viewModel.spp.isBluetoothReady,
+            error = if (linkState == LinkState.ERROR) lastError else null,
             onRescan = { viewModel.startBluetoothScan() },
             onPickDevice = {
                 viewModel.connectBluetooth(it.address)
@@ -323,6 +324,7 @@ private fun ConnectionDialog(
     devices: List<BtDevice>,
     scanning: Boolean,
     bluetoothReady: Boolean,
+    error: String?,
     onRescan: () -> Unit,
     onPickDevice: (BtDevice) -> Unit,
     onPickSimulator: (String) -> Unit,
@@ -341,6 +343,31 @@ private fun ConnectionDialog(
             // En landscape el dialogo es muy bajo. Sin scroll, la lista de dispositivos
             // queda fuera de la pantalla y el usuario cree que la app no los encuentra.
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                // El error del intento anterior se muestra aqui y no bajo el boton del
+                // mando: alli entra en un texto diminuto y estos mensajes son la unica
+                // pista util cuando el modulo no coopera.
+                if (error != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Neon.Danger.copy(alpha = 0.10f))
+                            .border(1.dp, Neon.Danger.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "NO SE PUDO CONECTAR",
+                            color = Neon.Danger,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(text = error, color = Neon.TextPrimary, fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,

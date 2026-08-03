@@ -119,7 +119,10 @@ class SppClient(
         val address = targetAddress
             ?: throw IOException("No se eligio ningun dispositivo")
 
+        // cancelDiscovery es asincrono. Sin esta pausa la radio sigue escaneando
+        // durante el connect() y lo tumba.
         localAdapter.cancelDiscovery()
+        Thread.sleep(DISCOVERY_SETTLE_MS)
 
         val device = localAdapter.getRemoteDevice(address)
         ensureBonded(device)
@@ -156,7 +159,13 @@ class SppClient(
         val limite = System.currentTimeMillis() + BOND_TIMEOUT_MS
         while (System.currentTimeMillis() < limite) {
             when (device.bondState) {
-                BluetoothDevice.BOND_BONDED -> return
+                BluetoothDevice.BOND_BONDED -> {
+                    // El vinculo recien creado no queda utilizable de inmediato: el stack
+                    // sigue cerrando el intercambio de claves. Conectar aqui mismo es la
+                    // causa habitual de "read failed, socket might closed or timeout".
+                    Thread.sleep(BOND_SETTLE_MS)
+                    return
+                }
                 BluetoothDevice.BOND_NONE -> throw IOException(
                     "Emparejado rechazado. El PIN del HC-05 suele ser 1234 o 0000."
                 )
@@ -167,18 +176,73 @@ class SppClient(
     }
 
     /**
-     * Algunos clones de HC-05 no publican el registro SDP del perfil SPP y rechazan la
-     * conexion estandar. El fallback abre el canal RFCOMM 1 por reflexion, que es el que
-     * usan esos modulos de fabrica.
+     * Abre el canal RFCOMM probando las cuatro variantes conocidas.
+     *
+     * No hay una sola que funcione en todos los HC-05: los originales responden al
+     * registro SDP seguro, varios clones solo aceptan el canal inseguro, y los mas
+     * baratos ni publican SDP y hay que atacar el canal 1 por reflexion. Ademas la
+     * primera conexion falla seguido aunque el modulo este bien, asi que se reintenta.
      */
     private fun openSocket(device: BluetoothDevice): BluetoothSocket {
-        return try {
-            device.createRfcommSocketToServiceRecord(SPP_UUID).apply { connect() }
-        } catch (standardFailed: IOException) {
-            val fallback = device.javaClass
-                .getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-                .invoke(device, 1) as BluetoothSocket
-            fallback.apply { connect() }
+        val variantes: List<Pair<String, () -> BluetoothSocket>> = listOf(
+            "SDP seguro" to { device.createRfcommSocketToServiceRecord(SPP_UUID) },
+            "SDP inseguro" to { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) },
+            "canal 1 seguro" to { reflectSocket(device, "createRfcommSocket") },
+            "canal 1 inseguro" to { reflectSocket(device, "createInsecureRfcommSocket") }
+        )
+
+        var ultimoFallo: Exception? = null
+
+        repeat(CONNECT_ATTEMPTS) { intento ->
+            for ((_, abrir) in variantes) {
+                val candidato = try {
+                    abrir()
+                } catch (noSoportado: Exception) {
+                    ultimoFallo = noSoportado
+                    continue
+                }
+
+                try {
+                    candidato.connect()
+                    return candidato
+                } catch (fallo: Exception) {
+                    ultimoFallo = fallo
+                    // Cerrar antes de la siguiente variante: un socket a medio abrir deja
+                    // el canal tomado y hace fracasar todo lo que venga despues.
+                    runCatching { candidato.close() }
+                    Thread.sleep(RETRY_DELAY_MS)
+                }
+            }
+            if (intento < CONNECT_ATTEMPTS - 1) Thread.sleep(ATTEMPT_DELAY_MS)
+        }
+
+        throw IOException(explicar(ultimoFallo))
+    }
+
+    private fun reflectSocket(device: BluetoothDevice, metodo: String): BluetoothSocket =
+        device.javaClass
+            .getMethod(metodo, Int::class.javaPrimitiveType)
+            .invoke(device, 1) as BluetoothSocket
+
+    /** Traduce el mensaje crudo del stack a algo sobre lo que se pueda actuar. */
+    private fun explicar(error: Exception?): String {
+        val crudo = error?.message.orEmpty()
+        return when {
+            crudo.contains("read failed", ignoreCase = true) ||
+                crudo.contains("timeout", ignoreCase = true) ->
+                "El HC-05 no acepto la conexion. Revisa que el LED parpadee rapido " +
+                    "(dos por segundo). Si parpadea lento esta en modo AT y no recibe " +
+                    "datos. Verifica tambien que no siga conectado a otro telefono."
+
+            crudo.contains("Service discovery failed", ignoreCase = true) ->
+                "El modulo no respondio al descubrimiento de servicios. Apaga y prende " +
+                    "el carro y vuelve a intentar."
+
+            crudo.contains("Device or resource busy", ignoreCase = true) ->
+                "El modulo esta ocupado con otra conexion. Reinicia el HC-05."
+
+            crudo.isBlank() -> "No se pudo abrir el canal con el modulo"
+            else -> crudo
         }
     }
 
@@ -235,5 +299,15 @@ class SppClient(
 
         /** Margen para que el usuario alcance a escribir el PIN en el dialogo del sistema. */
         const val BOND_TIMEOUT_MS = 30_000L
+
+        /** Espera tras crear el vinculo, antes de que el canal sea utilizable. */
+        const val BOND_SETTLE_MS = 1_500L
+
+        /** cancelDiscovery no es inmediato; la radio tarda en soltar el escaneo. */
+        const val DISCOVERY_SETTLE_MS = 400L
+
+        const val CONNECT_ATTEMPTS = 3
+        const val RETRY_DELAY_MS = 250L
+        const val ATTEMPT_DELAY_MS = 900L
     }
 }
