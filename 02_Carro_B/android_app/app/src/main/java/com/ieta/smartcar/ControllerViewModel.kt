@@ -79,6 +79,12 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     var steerAuthority by mutableStateOf(prefs.getInt(KEY_STEER_AUTHORITY, DEFAULT_AUTHORITY))
         private set
 
+    /** Cuanto mas debe recorrer el dedo respecto del circulo dibujado, en porcentaje. */
+    var stickTravel by mutableStateOf(prefs.getInt(KEY_STICK_TRAVEL, DEFAULT_TRAVEL))
+        private set
+
+    val stickTravelScale: Float get() = stickTravel / 100f
+
     private val tuning: DriveTuning
         get() = DriveTuning(
             throttleExpo = throttleExpo / 100f,
@@ -148,6 +154,14 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     fun adjustSteerExpo(delta: Int) {
         steerExpo = (steerExpo + delta).coerceIn(0, 90)
         prefs.edit().putInt(KEY_STEER_EXPO, steerExpo).apply()
+    }
+
+    fun adjustStickTravel(delta: Int) {
+        // El tope es 200 porque los sticks van pegados a las esquinas: mas recorrido que
+        // ese no cabe entre el centro del stick y el borde de la pantalla, y el tope del
+        // rango quedaria fuera del alcance del dedo.
+        stickTravel = (stickTravel + delta).coerceIn(100, 200)
+        prefs.edit().putInt(KEY_STICK_TRAVEL, stickTravel).apply()
     }
 
     fun adjustSteerAuthority(delta: Int) {
@@ -274,9 +288,13 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         const val DEFAULT_STEER_EXPO = 60
         const val DEFAULT_AUTHORITY = 65
 
+        /** 150 %: con el circulo dibujado solo, un pulgar grueso barre todo el rango. */
+        const val DEFAULT_TRAVEL = 150
+
         const val KEY_THROTTLE_EXPO = "throttle_expo"
         const val KEY_STEER_EXPO = "steer_expo"
         const val KEY_STEER_AUTHORITY = "steer_authority"
+        const val KEY_STICK_TRAVEL = "stick_travel"
 
         /** Margen antes de descartar un transporte y probar el otro. */
         const val CONNECT_WINDOW_MS = 25_000L

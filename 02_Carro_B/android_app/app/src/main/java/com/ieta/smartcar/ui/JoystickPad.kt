@@ -53,6 +53,7 @@ fun JoystickPad(
     modifier: Modifier = Modifier,
     diameter: Dp = 200.dp,
     accent: Color = Neon.Cyan,
+    travelScale: Float = 1f,
     onChange: (x: Float, y: Float) -> Unit
 ) {
     val callback by rememberUpdatedState(onChange)
@@ -80,10 +81,16 @@ fun JoystickPad(
         Canvas(
             modifier = Modifier
                 .matchParentSize()
-                .pointerInput(axis) {
+                .pointerInput(axis, travelScale) {
                     val radius = (diameter.toPx() / 2f)
                     val knobRadius = radius * 0.30f
                     val travel = radius - knobRadius - 8.dp.toPx()
+
+                    // El dedo recorre mas que la perilla. El circulo no puede crecer
+                    // mucho mas sin comerse la pantalla, asi que se separa el recorrido
+                    // del dedo del recorrido dibujado: con un pulgar grueso, un
+                    // desplazamiento corto sobre el vidrio barria todo el rango util.
+                    val inputTravel = travel * travelScale
                     val center = Offset(size.width / 2f, size.height / 2f)
 
                     fun publish(position: Offset) {
@@ -92,11 +99,13 @@ fun JoystickPad(
                         if (axis == StickAxis.HORIZONTAL) delta = Offset(delta.x, 0f)
 
                         val distance = hypot(delta.x, delta.y)
-                        if (distance > travel) {
-                            delta *= (travel / distance)
+                        if (distance > inputTravel) {
+                            delta *= (inputTravel / distance)
                         }
-                        knob = delta
-                        callback(delta.x / travel, -delta.y / travel)
+                        // La perilla llega al borde justo cuando el dedo llega al tope,
+                        // de modo que lo que se ve sigue coincidiendo con lo que se manda.
+                        knob = delta * (travel / inputTravel)
+                        callback(delta.x / inputTravel, -delta.y / inputTravel)
                     }
 
                     awaitEachGesture {

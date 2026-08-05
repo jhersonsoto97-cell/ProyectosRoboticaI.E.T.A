@@ -147,9 +147,19 @@ Los tres valores se guardan en el telefono y se aplican en la app, sin viajar al
 
 | Ajuste | Que hace | Si el carro... |
 |---|---|---|
+| `RECORRIDO DEL STICK` | Cuanto debe moverse el dedo para llegar al tope | ...cambia demasiado con poco movimiento: subirlo |
 | `SUAVIDAD ACELERADOR` | Achata el centro del stick de gas | ...arranca de golpe: subirla |
 | `SUAVIDAD DIRECCION` | Lo mismo para el stick de giro | ...corrige brusco: subirla |
 | `FUERZA DE GIRO` | Cuanta diferencia entre ruedas puede pedir la direccion | ...trompea en vez de curvar: bajarla |
+
+**Recorrido del stick** separa lo que recorre el dedo de lo que recorre la perilla. El
+circulo no puede crecer mucho mas sin comerse la pantalla, pero con un pulgar grueso un
+desplazamiento corto sobre el vidrio ya barre todo el rango util. Al 150 % hay que mover
+el dedo una vez y media mas para el mismo efecto, y la perilla sigue llegando al borde
+justo cuando el dedo llega al tope, de modo que lo que se ve coincide con lo que se manda.
+
+El tope es 200 % porque los sticks van pegados a las esquinas: mas recorrido que ese no
+cabe entre el centro del stick y el borde de la pantalla.
 
 **Fuerza de giro** es la que mas se nota. Al 100 % el stick al tope hace girar el carro
 sobre su propio eje, que sirve para maniobrar en el sitio pero vuelve imposible trazar

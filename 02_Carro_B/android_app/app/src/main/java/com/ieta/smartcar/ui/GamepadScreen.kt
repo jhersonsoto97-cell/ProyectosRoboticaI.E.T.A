@@ -108,6 +108,7 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
                 axis = StickAxis.VERTICAL,
                 diameter = stickDiameter,
                 accent = Neon.Cyan,
+                travelScale = viewModel.stickTravelScale,
                 onChange = viewModel::onLeftStick,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -123,6 +124,7 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
                 },
                 diameter = stickDiameter,
                 accent = Neon.Blue,
+                travelScale = viewModel.stickTravelScale,
                 onChange = viewModel::onRightStick,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -191,12 +193,14 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
             throttleExpo = viewModel.throttleExpo,
             steerExpo = viewModel.steerExpo,
             steerAuthority = viewModel.steerAuthority,
+            stickTravel = viewModel.stickTravel,
             echo = trimEcho,
             onAdjustLeft = viewModel::adjustReverseTrimLeft,
             onAdjustRight = viewModel::adjustReverseTrimRight,
             onAdjustThrottleExpo = viewModel::adjustThrottleExpo,
             onAdjustSteerExpo = viewModel::adjustSteerExpo,
             onAdjustAuthority = viewModel::adjustSteerAuthority,
+            onAdjustTravel = viewModel::adjustStickTravel,
             onDismiss = { showCalibration = false }
         )
     }
@@ -216,12 +220,14 @@ private fun CalibrationDialog(
     throttleExpo: Int,
     steerExpo: Int,
     steerAuthority: Int,
+    stickTravel: Int,
     echo: String?,
     onAdjustLeft: (Int) -> Unit,
     onAdjustRight: (Int) -> Unit,
     onAdjustThrottleExpo: (Int) -> Unit,
     onAdjustSteerExpo: (Int) -> Unit,
     onAdjustAuthority: (Int) -> Unit,
+    onAdjustTravel: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -236,6 +242,10 @@ private fun CalibrationDialog(
                 // explicacion se resume a un renglon: el detalle esta en el README, y
                 // aqui solo estorbaria entre el usuario y los botones.
                 SectionLabel("SENSIBILIDAD")
+                TrimRow("RECORRIDO DEL STICK", stickTravel, Neon.Ok, onAdjustTravel)
+                Hint("Mas alto, hay que mover mas el dedo para el mismo efecto.")
+
+                Spacer(Modifier.height(10.dp))
                 TrimRow("SUAVIDAD ACELERADOR", throttleExpo, Neon.Cyan, onAdjustThrottleExpo)
                 Hint("Mas alto, mas fino cerca del centro. Igual llega al maximo.")
 
