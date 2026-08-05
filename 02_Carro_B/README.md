@@ -154,6 +154,29 @@ encima el carro retrocede hacia el observador, con lo que confundir horario con
 antihorario es facilisimo. Una sola equivocacion al leer el giro manda el ajuste en la
 direccion contraria. La prueba `T` no tiene esa trampa.
 
+### Antes de calibrar: comprobar que el PWM llegue a las dos ruedas
+
+Si al bajar el trim de una rueda su velocidad **no cambia**, no hay nada que calibrar:
+el PWM no la esta controlando y cualquier valor que se elija sera contra un motor que
+corre siempre a fondo.
+
+Casi siempre es el **jumper de ENA o ENB** del modulo L298N. Ese jumper ata la entrada
+de habilitacion a 5 V fijos, de modo que el motor queda a potencia maxima y el PWM del
+Arduino se ignora. Cuesta verlo porque `IN1`..`IN4` siguen funcionando: el sentido de
+giro responde y el carro frena, asi que todo parece bien salvo la velocidad.
+
+| Canal | Enable | Pin | Salidas |
+|---|---|---|---|
+| A | ENA | D10 | OUT1 / OUT2 |
+| B | ENB | D5 | OUT3 / OUT4 |
+
+Comprobacion sin instrumentos: con el carro levantado, cambiar el boton **LIMITE** de la
+app entre 40 % y 100 % mientras se acelera. Las dos ruedas deben cambiar de velocidad.
+La que no cambie tiene su jumper puesto o le falta el cable del enable.
+
+Calibrar sin hacer antes esta comprobacion lleva a bajar el trim de la rueda sana cada
+vez mas, persiguiendo a una que no se puede bajar.
+
 ### Ajuste del trim, a velocidad de crucero
 
 1. Bateria **cargada**. Una bateria baja exagera la disparidad y la calibracion sale mal.
