@@ -7,3 +7,8 @@
 # Cache de Python del simulador.
 __pycache__/
 *.pyc
+
+# Archivos fuente del icono. Lo que la app necesita ya vive en
+# android_app/app/src/main/res/, asi que esta carpeta solo duplicaria esos PNG en el
+# repositorio ademas de los masters en alta que no intervienen en la compilacion.
+icono_apk/

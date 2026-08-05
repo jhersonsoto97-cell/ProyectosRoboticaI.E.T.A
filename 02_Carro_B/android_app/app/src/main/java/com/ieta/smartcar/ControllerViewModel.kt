@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ieta.smartcar.control.DriveMixer
 import com.ieta.smartcar.control.DriveMode
+import com.ieta.smartcar.control.DriveTuning
 import com.ieta.smartcar.control.WheelPower
 import com.ieta.smartcar.link.BleClient
 import com.ieta.smartcar.link.BtDevice
@@ -68,6 +69,23 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
     private var lastTrimSent = 0L
 
+    // Sensibilidad del mando, en porcentaje para poder mostrarla y ajustarla con enteros.
+    // A diferencia del trim, no viaja al carro: se aplica aqui, sobre la posicion del
+    // stick, antes de calcular la potencia.
+    var throttleExpo by mutableStateOf(prefs.getInt(KEY_THROTTLE_EXPO, DEFAULT_THROTTLE_EXPO))
+        private set
+    var steerExpo by mutableStateOf(prefs.getInt(KEY_STEER_EXPO, DEFAULT_STEER_EXPO))
+        private set
+    var steerAuthority by mutableStateOf(prefs.getInt(KEY_STEER_AUTHORITY, DEFAULT_AUTHORITY))
+        private set
+
+    private val tuning: DriveTuning
+        get() = DriveTuning(
+            throttleExpo = throttleExpo / 100f,
+            steerExpo = steerExpo / 100f,
+            steerAuthority = steerAuthority / 100f
+        )
+
     /** Potencia calculada en el ultimo tick; la interfaz la muestra como telemetria. */
     var wheelPower by mutableStateOf(WheelPower(0, 0)); private set
 
@@ -120,6 +138,23 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         reverseTrimRight = (reverseTrimRight + delta).coerceIn(TRIM_MIN, TRIM_MAX)
         prefs.edit().putInt(KEY_TRIM_RIGHT, reverseTrimRight).apply()
         lastTrimSent = 0L
+    }
+
+    fun adjustThrottleExpo(delta: Int) {
+        throttleExpo = (throttleExpo + delta).coerceIn(0, 90)
+        prefs.edit().putInt(KEY_THROTTLE_EXPO, throttleExpo).apply()
+    }
+
+    fun adjustSteerExpo(delta: Int) {
+        steerExpo = (steerExpo + delta).coerceIn(0, 90)
+        prefs.edit().putInt(KEY_STEER_EXPO, steerExpo).apply()
+    }
+
+    fun adjustSteerAuthority(delta: Int) {
+        // El minimo no es cero: sin autoridad la direccion deja de existir y el carro
+        // solo puede ir en linea recta.
+        steerAuthority = (steerAuthority + delta).coerceIn(20, 100)
+        prefs.edit().putInt(KEY_STEER_AUTHORITY, steerAuthority).apply()
     }
 
     fun startScan() = scanner.start()
@@ -184,7 +219,9 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         val power = if (emergencyStop) {
             WheelPower(0, 0)
         } else {
-            DriveMixer.mix(mode, leftStickY, leftStickX, rightStickY, rightStickX, speedCap)
+            DriveMixer.mix(
+                mode, leftStickY, leftStickX, rightStickY, rightStickX, speedCap, tuning
+            )
         }
         wheelPower = power
 
@@ -230,6 +267,16 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
         const val KEY_TRIM_LEFT = "reverse_trim_left"
         const val KEY_TRIM_RIGHT = "reverse_trim_right"
+
+        // Arrancan en valores suaves y no lineales: con respuesta directa el carro
+        // resulta imposible de dosificar, que es la queja mas comun al probarlo.
+        const val DEFAULT_THROTTLE_EXPO = 55
+        const val DEFAULT_STEER_EXPO = 60
+        const val DEFAULT_AUTHORITY = 65
+
+        const val KEY_THROTTLE_EXPO = "throttle_expo"
+        const val KEY_STEER_EXPO = "steer_expo"
+        const val KEY_STEER_AUTHORITY = "steer_authority"
 
         /** Margen antes de descartar un transporte y probar el otro. */
         const val CONNECT_WINDOW_MS = 25_000L

@@ -188,9 +188,15 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
         CalibrationDialog(
             trimLeft = viewModel.reverseTrimLeft,
             trimRight = viewModel.reverseTrimRight,
+            throttleExpo = viewModel.throttleExpo,
+            steerExpo = viewModel.steerExpo,
+            steerAuthority = viewModel.steerAuthority,
             echo = trimEcho,
             onAdjustLeft = viewModel::adjustReverseTrimLeft,
             onAdjustRight = viewModel::adjustReverseTrimRight,
+            onAdjustThrottleExpo = viewModel::adjustThrottleExpo,
+            onAdjustSteerExpo = viewModel::adjustSteerExpo,
+            onAdjustAuthority = viewModel::adjustSteerAuthority,
             onDismiss = { showCalibration = false }
         )
     }
@@ -207,9 +213,15 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
 private fun CalibrationDialog(
     trimLeft: Int,
     trimRight: Int,
+    throttleExpo: Int,
+    steerExpo: Int,
+    steerAuthority: Int,
     echo: String?,
     onAdjustLeft: (Int) -> Unit,
     onAdjustRight: (Int) -> Unit,
+    onAdjustThrottleExpo: (Int) -> Unit,
+    onAdjustSteerExpo: (Int) -> Unit,
+    onAdjustAuthority: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -217,22 +229,31 @@ private fun CalibrationDialog(
         containerColor = Neon.Surface,
         titleContentColor = Neon.TextPrimary,
         textContentColor = Neon.TextMuted,
-        title = { Text("Compensacion de reversa", fontSize = 16.sp) },
+        title = { Text("Ajustes del mando", fontSize = 16.sp) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text(
-                    text = "Recorta la rueda que corre mas al retroceder. Solo afecta la " +
-                        "reversa; el avance no se toca.",
-                    color = Neon.TextMuted,
-                    fontSize = 11.sp
-                )
+                // El panel se usa manejando y en landscape entra poca altura. Cada
+                // explicacion se resume a un renglon: el detalle esta en el README, y
+                // aqui solo estorbaria entre el usuario y los botones.
+                SectionLabel("SENSIBILIDAD")
+                TrimRow("SUAVIDAD ACELERADOR", throttleExpo, Neon.Cyan, onAdjustThrottleExpo)
+                Hint("Mas alto, mas fino cerca del centro. Igual llega al maximo.")
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
+                TrimRow("SUAVIDAD DIRECCION", steerExpo, Neon.Blue, onAdjustSteerExpo)
+
+                Spacer(Modifier.height(10.dp))
+                TrimRow("FUERZA DE GIRO", steerAuthority, Neon.Warning, onAdjustAuthority)
+                Hint("Mas bajo, curvas mas abiertas. Mas alto, gira sobre su eje.")
+
+                Spacer(Modifier.height(18.dp))
+                SectionLabel("COMPENSACION DE REVERSA")
                 TrimRow("RUEDA IZQUIERDA", trimLeft, Neon.Cyan, onAdjustLeft)
                 Spacer(Modifier.height(10.dp))
                 TrimRow("RUEDA DERECHA", trimRight, Neon.Blue, onAdjustRight)
+                Hint("Recorta la rueda que corre mas al retroceder. No afecta el avance.")
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
                     text = if (echo != null) {
                         "Carro confirma: $echo"
@@ -240,16 +261,6 @@ private fun CalibrationDialog(
                         "Esperando confirmacion del carro..."
                     },
                     color = if (echo != null) Neon.Ok else Neon.TextMuted,
-                    fontSize = 10.sp
-                )
-
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Baja de a 5 hasta pasarte, es decir hasta que el carro se " +
-                        "abra hacia el otro lado. Ahi el valor bueno queda entre las dos " +
-                        "ultimas pruebas. Debajo de 25 el acelerador deja de actuar sobre " +
-                        "esa rueda.",
-                    color = Neon.TextMuted,
                     fontSize = 10.sp
                 )
             }
@@ -677,6 +688,16 @@ private fun DeviceRow(device: BtDevice, onClick: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun Hint(text: String) {
+    Text(
+        text = text,
+        color = Neon.TextMuted,
+        fontSize = 9.sp,
+        modifier = Modifier.padding(top = 4.dp, start = 2.dp)
+    )
 }
 
 @Composable

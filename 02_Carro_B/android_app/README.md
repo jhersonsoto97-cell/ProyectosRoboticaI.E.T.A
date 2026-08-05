@@ -141,6 +141,24 @@ respuesta lineal el tramo util del pulgar se gasta en la mitad alta del recorrid
 maniobrar despacio se vuelve imposible; la curva achata el centro y conserva el extremo,
 de modo que se gana precision sin perder velocidad maxima.
 
+### Sensibilidad, en el boton de engranaje
+
+Los tres valores se guardan en el telefono y se aplican en la app, sin viajar al carro.
+
+| Ajuste | Que hace | Si el carro... |
+|---|---|---|
+| `SUAVIDAD ACELERADOR` | Achata el centro del stick de gas | ...arranca de golpe: subirla |
+| `SUAVIDAD DIRECCION` | Lo mismo para el stick de giro | ...corrige brusco: subirla |
+| `FUERZA DE GIRO` | Cuanta diferencia entre ruedas puede pedir la direccion | ...trompea en vez de curvar: bajarla |
+
+**Fuerza de giro** es la que mas se nota. Al 100 % el stick al tope hace girar el carro
+sobre su propio eje, que sirve para maniobrar en el sitio pero vuelve imposible trazar
+una curva. Bajarla abre el radio: al 65 % el carro dobla en vez de trompear, y a valores
+menores describe curvas cada vez mas amplias.
+
+Las dos suavidades no recortan la velocidad maxima, solo reparten distinto el recorrido
+del pulgar. Con el stick al tope la salida es la misma con suavidad 0 que con 90.
+
 | Elemento | Funcion |
 |---|---|
 | Stick izquierdo | Modo ARC: acelerador (adelante/atras). Modo TANK: oruga izquierda |
