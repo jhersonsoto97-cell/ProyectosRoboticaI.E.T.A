@@ -7,6 +7,10 @@
     Ejemplo: <180,-120> avanza la rueda izquierda y retrocede la derecha.
     La app repite el paquete 20 veces por segundo; ese flujo alimenta el failsafe.
 
+  Paquete de calibracion:
+    {L,R}   trim de reversa por rueda, en porcentaje entre 25 y 100. Permite emparejar
+            los motores manejando, sin recompilar. La app lo reenvia cada segundo.
+
   Comandos discretos heredados (monitor serie o apps antiguas):
     A = avanzar, R = retroceder, I = izquierda, D = derecha, S = detener.
     Son de enclavamiento: quedan fijos hasta el siguiente comando, sin failsafe.
@@ -76,11 +80,20 @@ const bool INVERTIR_DERECHA = false;
 // que es lo unico confiable: mirar hacia donde gira el carro se presta a confusion
 // cuando retrocede, porque el sentido aparente depende de desde donde se lo mire.
 const int16_t TRIM_IZQUIERDA_ADELANTE = 75;
-const int16_t TRIM_IZQUIERDA_ATRAS = 60;
 const int16_t TRIM_DERECHA_ADELANTE = 100;
-const int16_t TRIM_DERECHA_ATRAS = 100;
 const int16_t PWM_MIN_IZQUIERDA = 60;
 const int16_t PWM_MIN_DERECHA = 60;
+
+// Los de reversa no son constantes: la app los ajusta en caliente con el paquete {L,R}
+// para poder calibrar manejando, en vez de recompilar y recargar por cada prueba. Estos
+// valores son solo el punto de partida hasta que llegue el primer paquete.
+int16_t trimIzquierdaAtras = 60;
+int16_t trimDerechaAtras = 100;
+
+// Por debajo de este trim el techo cae al piso de torque y la rueda queda a velocidad
+// fija: el acelerador deja de tener efecto sobre ella y seguir bajando no cambia nada.
+// Necesitar valores asi de bajos indica un problema mecanico, no de compensacion.
+const int16_t TRIM_MINIMO = 25;
 
 // ---------- Parametros de control ----------
 const int16_t PWM_MAX = 255;             // Techo del analogWrite de 8 bits.
@@ -106,10 +119,12 @@ unsigned long marcaUltimoPaquete = 0;  // Momento del ultimo paquete <L,R> valid
 unsigned long marcaUltimoTick = 0;     // Momento de la ultima actualizacion de rampa.
 bool enlaceAnalogicoVivo = false;      // Solo con enlace analogico se vigila el failsafe.
 
-// Buffer del parser: acumula lo que llega entre '<' y '>'.
+// Buffer del parser. delimitadorCierre vale 0 cuando no se esta capturando, y si no
+// guarda el cierre que corresponde al paquete abierto: '>' para conduccion, '}' para
+// calibracion. Un solo buffer atiende ambos porque nunca se solapan.
 char bufferPaquete[16];
 uint8_t largoBuffer = 0;
-bool capturandoPaquete = false;
+char delimitadorCierre = 0;
 
 // Declaraciones anticipadas de las funciones usadas por el programa.
 void configurarPines();
@@ -121,6 +136,7 @@ void aplicarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
                   int16_t potencia, bool invertir);
 void procesarCaracter(char entrante, char origen);
 void procesarPaqueteAnalogico(char *texto);
+void procesarPaqueteDeTrim(char *texto);
 void procesarComandoDiscreto(char comando, char origen);
 void ejecutarPruebaDeSentido();
 void probarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
@@ -200,12 +216,12 @@ int16_t escalarPotencia(int16_t crudo, int16_t pwmMin, int16_t trimAdelante, int
 // carro simplemente se abriria un poco y nadie sabria por que.
 int16_t potenciaIzquierda(int16_t crudo) {
   return escalarPotencia(crudo, PWM_MIN_IZQUIERDA,
-                         TRIM_IZQUIERDA_ADELANTE, TRIM_IZQUIERDA_ATRAS);
+                         TRIM_IZQUIERDA_ADELANTE, trimIzquierdaAtras);
 }
 
 int16_t potenciaDerecha(int16_t crudo) {
   return escalarPotencia(crudo, PWM_MIN_DERECHA,
-                         TRIM_DERECHA_ADELANTE, TRIM_DERECHA_ATRAS);
+                         TRIM_DERECHA_ADELANTE, trimDerechaAtras);
 }
 
 // Acerca la salida al objetivo sin saltos. Al invertir el sentido pasa por cero,
@@ -243,22 +259,33 @@ void aplicarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
 }
 
 void procesarCaracter(char entrante, char origen) {
-  // '<' siempre reinicia la captura: un paquete truncado nunca contamina al siguiente.
+  // Una apertura siempre reinicia la captura: un paquete truncado nunca contamina al
+  // siguiente, aunque sea de otro tipo.
   if (entrante == '<') {
-    capturandoPaquete = true;
+    delimitadorCierre = '>';
+    largoBuffer = 0;
+    return;
+  }
+  if (entrante == '{') {
+    delimitadorCierre = '}';
     largoBuffer = 0;
     return;
   }
 
-  if (capturandoPaquete) {
-    if (entrante == '>') {
-      capturandoPaquete = false;
+  if (delimitadorCierre != 0) {
+    if (entrante == delimitadorCierre) {
+      const char cierre = delimitadorCierre;
+      delimitadorCierre = 0;
       bufferPaquete[largoBuffer] = '\0';
-      procesarPaqueteAnalogico(bufferPaquete);
+      if (cierre == '>') {
+        procesarPaqueteAnalogico(bufferPaquete);
+      } else {
+        procesarPaqueteDeTrim(bufferPaquete);
+      }
     } else if (largoBuffer < (sizeof(bufferPaquete) - 1)) {
       bufferPaquete[largoBuffer++] = entrante;
     } else {
-      capturandoPaquete = false;          // Paquete mas largo de lo posible: se descarta.
+      delimitadorCierre = 0;              // Paquete mas largo de lo posible: se descarta.
     }
     return;
   }
@@ -285,6 +312,44 @@ void procesarPaqueteAnalogico(char *texto) {
 
   marcaUltimoPaquete = millis();          // Alimenta el failsafe.
   enlaceAnalogicoVivo = true;
+}
+
+/*
+  Paquete de calibracion {izquierda,derecha}, en porcentaje y solo para la reversa.
+
+  La app lo reenvia una vez por segundo en vez de una sola al cambiar. Cuesta once bytes
+  y ahorra toda la logica de reintentos: si un paquete se pierde, el siguiente corrige.
+  El eco solo sale cuando un valor cambia de verdad, para no ensuciar el monitor con una
+  linea por segundo.
+*/
+void procesarPaqueteDeTrim(char *texto) {
+  char *separador = strchr(texto, ',');
+  if (separador == NULL) {
+    return;
+  }
+  *separador = '\0';
+
+  const int16_t nuevoIzquierda = constrain(atoi(texto), TRIM_MINIMO, 100);
+  const int16_t nuevoDerecha = constrain(atoi(separador + 1), TRIM_MINIMO, 100);
+
+  if (nuevoIzquierda == trimIzquierdaAtras && nuevoDerecha == trimDerechaAtras) {
+    return;
+  }
+
+  trimIzquierdaAtras = nuevoIzquierda;
+  trimDerechaAtras = nuevoDerecha;
+
+  Serial.print(F("TRIM reversa izq="));
+  Serial.print(trimIzquierdaAtras);
+  Serial.print(F(" der="));
+  Serial.println(trimDerechaAtras);
+
+  // Eco hacia el mando: la app lo muestra como telemetria y confirma que el carro
+  // recibio de verdad el ajuste, en vez de suponerlo.
+  bluetooth.print(F("TRIM "));
+  bluetooth.print(trimIzquierdaAtras);
+  bluetooth.print('/');
+  bluetooth.println(trimDerechaAtras);
 }
 
 void procesarComandoDiscreto(char comando, char origen) {
@@ -379,7 +444,7 @@ void ejecutarPruebaDeSentido() {
   // el carro arranque de golpe con una posicion de joystick ya vieja.
   while (bluetooth.available() > 0) bluetooth.read();
   while (Serial.available() > 0) Serial.read();
-  capturandoPaquete = false;
+  delimitadorCierre = 0;
   largoBuffer = 0;
 
   frenar();

@@ -41,11 +41,16 @@ FAILSAFE_MS = 400
 # Compensacion entre motores. Espejo de las constantes del firmware: si se ajusta una
 # alla hay que ajustarla aqui, o el simulador dejara de predecir al carro real.
 TRIM_IZQUIERDA_ADELANTE = 75
-TRIM_IZQUIERDA_ATRAS = 60
 TRIM_DERECHA_ADELANTE = 100
-TRIM_DERECHA_ATRAS = 100
 PWM_MIN_IZQUIERDA = 60
 PWM_MIN_DERECHA = 60
+
+# Los de reversa llegan por el paquete {L,R} y estos son solo el arranque, igual que en
+# el firmware. Debajo de TRIM_MINIMO el techo cae al piso de torque y la rueda queda a
+# velocidad fija, con lo que el acelerador deja de actuar sobre ella.
+TRIM_IZQUIERDA_ATRAS = 60
+TRIM_DERECHA_ATRAS = 100
+TRIM_MINIMO = 25
 
 # ----------------------------------------------------------
 # Parametros mecanicos del chasis 2WD tipico del proyecto.
@@ -102,16 +107,23 @@ class FirmwareModel:
         self.aplicado = [0.0, 0.0]
         self.enlace_vivo = False
         self.failsafe_disparado = False
+        self.trim_izq_atras = TRIM_IZQUIERDA_ATRAS
+        self.trim_der_atras = TRIM_DERECHA_ATRAS
         self._ultimo_paquete = 0.0
         self._deuda_tick = 0.0
+
+    def ajustar_trim(self, izquierda, derecha):
+        """Aplica el paquete {L,R} de calibracion que manda la app."""
+        self.trim_izq_atras = min(max(izquierda, TRIM_MINIMO), 100)
+        self.trim_der_atras = min(max(derecha, TRIM_MINIMO), 100)
 
     def _aplicar(self, izquierda, derecha):
         self.objetivo[0] = escalar_potencia(
             max(-PWM_MAX, min(PWM_MAX, izquierda)), PWM_MIN_IZQUIERDA,
-            TRIM_IZQUIERDA_ADELANTE, TRIM_IZQUIERDA_ATRAS)
+            TRIM_IZQUIERDA_ADELANTE, self.trim_izq_atras)
         self.objetivo[1] = escalar_potencia(
             max(-PWM_MAX, min(PWM_MAX, derecha)), PWM_MIN_DERECHA,
-            TRIM_DERECHA_ADELANTE, TRIM_DERECHA_ATRAS)
+            TRIM_DERECHA_ADELANTE, self.trim_der_atras)
 
     def recibir_paquete(self, izquierda, derecha):
         self._aplicar(izquierda, derecha)
@@ -197,10 +209,11 @@ class CommandServer(threading.Thread):
     hardware lo soporta.
     """
 
-    def __init__(self, port, on_packet, on_client_change):
+    def __init__(self, port, on_packet, on_trim, on_client_change):
         super().__init__(daemon=True)
         self.port = port
         self.on_packet = on_packet
+        self.on_trim = on_trim
         self.on_client_change = on_client_change
         self._client = None
         self._lock = threading.Lock()
@@ -236,25 +249,28 @@ class CommandServer(threading.Thread):
             self.on_client_change(None)
 
     def _atender(self, conexion):
+        # Espejo del parser del firmware: '<' abre conduccion y '{' abre calibracion.
+        # Un solo buffer atiende ambos porque los paquetes nunca se solapan.
+        cierres = {"<": ">", "{": "}"}
         buffer = ""
-        capturando = False
+        cierre = None
         try:
             while self._running:
                 datos = conexion.recv(256)
                 if not datos:
                     break
                 for byte in datos.decode("ascii", errors="ignore"):
-                    if byte == "<":
-                        capturando = True
+                    if byte in cierres:
+                        cierre = cierres[byte]
                         buffer = ""
-                    elif capturando and byte == ">":
-                        capturando = False
-                        self._despachar(buffer)
-                    elif capturando:
+                    elif cierre is not None and byte == cierre:
+                        self._despachar(buffer, cierre)
+                        cierre = None
+                    elif cierre is not None:
                         if len(buffer) < 15:
                             buffer += byte
                         else:
-                            capturando = False
+                            cierre = None
         except OSError:
             pass
         finally:
@@ -263,14 +279,19 @@ class CommandServer(threading.Thread):
             except OSError:
                 pass
 
-    def _despachar(self, texto):
+    def _despachar(self, texto, cierre):
         partes = texto.split(",")
         if len(partes) != 2:
             return
         try:
-            self.on_packet(int(partes[0]), int(partes[1]))
+            izquierda, derecha = int(partes[0]), int(partes[1])
         except ValueError:
-            pass
+            return
+
+        if cierre == ">":
+            self.on_packet(izquierda, derecha)
+        else:
+            self.on_trim(izquierda, derecha)
 
     def enviar_telemetria(self, linea):
         """Devuelve texto al mando, como hace el Serial del Arduino."""
@@ -316,7 +337,8 @@ class SimulatorApp:
         root.bind("<KeyRelease>", self._tecla_arriba)
         root.focus_set()
 
-        self.servidor = CommandServer(port, self._paquete_recibido, self._cambio_cliente)
+        self.servidor = CommandServer(
+            port, self._paquete_recibido, self._trim_recibido, self._cambio_cliente)
         self.servidor.start()
 
         self._loop()
@@ -325,6 +347,13 @@ class SimulatorApp:
 
     def _paquete_recibido(self, izquierda, derecha):
         self.firmware.recibir_paquete(izquierda, derecha)
+
+    def _trim_recibido(self, izquierda, derecha):
+        anterior = (self.firmware.trim_izq_atras, self.firmware.trim_der_atras)
+        self.firmware.ajustar_trim(izquierda, derecha)
+        nuevo = (self.firmware.trim_izq_atras, self.firmware.trim_der_atras)
+        if nuevo != anterior:
+            self.servidor.enviar_telemetria(f"TRIM {nuevo[0]}/{nuevo[1]}")
 
     def _cambio_cliente(self, direccion):
         self.cliente = direccion
@@ -537,6 +566,10 @@ class SimulatorApp:
             ("  velocidad", f"{self.velocidad:+.2f} m/s"),
             ("  rumbo", f"{rumbo:3d} deg"),
             ("  recorrido", f"{self.car.distancia:.1f} m"),
+            ("", ""),
+            ("TRIM REVERSA", ""),
+            ("  izquierda", f"{self.firmware.trim_izq_atras:3d} %"),
+            ("  derecha", f"{self.firmware.trim_der_atras:3d} %"),
             ("", ""),
             ("ENLACE", "vivo" if self.firmware.enlace_vivo else "inactivo"),
         ]

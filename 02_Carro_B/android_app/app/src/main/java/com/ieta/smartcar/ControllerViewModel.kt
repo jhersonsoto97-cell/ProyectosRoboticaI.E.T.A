@@ -56,6 +56,18 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     var emergencyStop by mutableStateOf(false); private set
     var speedCapIndex by mutableStateOf(SPEED_CAPS.lastIndex); private set
 
+    // Compensacion de reversa, ajustable en caliente. Vive en la app y no en el firmware
+    // para poder calibrar manejando; se guarda en disco porque perderla al cerrar la app
+    // obligaria a repetir toda la calibracion.
+    private val prefs = application.getSharedPreferences("calibracion", Context.MODE_PRIVATE)
+
+    var reverseTrimLeft by mutableStateOf(prefs.getInt(KEY_TRIM_LEFT, DEFAULT_TRIM))
+        private set
+    var reverseTrimRight by mutableStateOf(prefs.getInt(KEY_TRIM_RIGHT, DEFAULT_TRIM))
+        private set
+
+    private var lastTrimSent = 0L
+
     /** Potencia calculada en el ultimo tick; la interfaz la muestra como telemetria. */
     var wheelPower by mutableStateOf(WheelPower(0, 0)); private set
 
@@ -96,6 +108,18 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     /** Arma el paro sin poder desarmarlo por accidente; solo el boton PARO lo libera. */
     fun engageEmergencyStop() {
         emergencyStop = true
+    }
+
+    fun adjustReverseTrimLeft(delta: Int) {
+        reverseTrimLeft = (reverseTrimLeft + delta).coerceIn(TRIM_MIN, TRIM_MAX)
+        prefs.edit().putInt(KEY_TRIM_LEFT, reverseTrimLeft).apply()
+        lastTrimSent = 0L   // fuerza el envio inmediato en vez de esperar al proximo tick
+    }
+
+    fun adjustReverseTrimRight(delta: Int) {
+        reverseTrimRight = (reverseTrimRight + delta).coerceIn(TRIM_MIN, TRIM_MAX)
+        prefs.edit().putInt(KEY_TRIM_RIGHT, reverseTrimRight).apply()
+        lastTrimSent = 0L
     }
 
     fun startScan() = scanner.start()
@@ -164,9 +188,25 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         }
         wheelPower = power
 
-        if (link.state.value == LinkState.CONNECTED) {
-            link.send("<${power.left},${power.right}>\n")
+        if (link.state.value != LinkState.CONNECTED) return
+
+        // La calibracion se reenvia periodicamente en lugar de una sola vez al cambiar.
+        // Evita toda la logica de reintentos: si un paquete se pierde, o el carro se
+        // reinicia a mitad de sesion, el siguiente restablece los valores solo.
+        //
+        // Ocupa su propio tick en vez de acompanar a la trama de conduccion. El canal de
+        // escritura es CONFLATED, asi que dos envios seguidos harian que el segundo pise
+        // al primero; y concatenarlos daria 21 bytes, uno mas de lo que entra en una
+        // escritura BLE con el MTU minimo. Saltear una trama de conduccion no cuesta
+        // nada: son 50 ms frente a los 400 ms del failsafe.
+        val ahora = System.currentTimeMillis()
+        if (ahora - lastTrimSent >= TRIM_PERIOD_MS) {
+            lastTrimSent = ahora
+            link.send("{$reverseTrimLeft,$reverseTrimRight}\n")
+            return
         }
+
+        link.send("<${power.left},${power.right}>\n")
     }
 
     override fun onCleared() {
@@ -180,6 +220,16 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         /** 20 Hz: holgado frente al failsafe de 400 ms y solo ~220 B/s sobre 9600 baudios. */
         const val FRAME_PERIOD_MS = 50L
         val SPEED_CAPS = floatArrayOf(0.4f, 0.7f, 1.0f)
+
+        const val TRIM_PERIOD_MS = 1000L
+        const val DEFAULT_TRIM = 100
+
+        /** Debajo de 25 el techo cae al piso de torque y el acelerador deja de actuar. */
+        const val TRIM_MIN = 25
+        const val TRIM_MAX = 100
+
+        const val KEY_TRIM_LEFT = "reverse_trim_left"
+        const val KEY_TRIM_RIGHT = "reverse_trim_right"
 
         /** Margen antes de descartar un transporte y probar el otro. */
         const val CONNECT_WINDOW_MS = 25_000L

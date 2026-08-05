@@ -1,5 +1,6 @@
 package com.ieta.smartcar.link
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -72,6 +73,8 @@ abstract class StreamCarLink(scope: CoroutineScope) : CarLink(scope) {
                         }
                     }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 onLinkLost(error)
             }

@@ -1,5 +1,6 @@
 package com.ieta.smartcar.link
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -76,6 +77,12 @@ abstract class CarLink(protected val scope: CoroutineScope) {
                 _endpointName.value = name
                 _state.value = LinkState.CONNECTED
                 startWriter()
+            } catch (cancelled: CancellationException) {
+                // Cancelar es control de flujo, no una falla del enlace. Tratarlo como
+                // error dejaba en pantalla mensajes internos de corrutinas que no le
+                // dicen nada al usuario y tapan el error real si lo hubiera.
+                teardown()
+                throw cancelled
             } catch (error: Exception) {
                 teardown()
                 _lastError.value = error.message ?: "No se pudo conectar"
@@ -112,6 +119,8 @@ abstract class CarLink(protected val scope: CoroutineScope) {
                 while (isActive) {
                     writeFrame(outbox.receive())
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 onLinkLost(error)
             }

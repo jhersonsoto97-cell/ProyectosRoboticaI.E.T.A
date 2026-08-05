@@ -64,6 +64,15 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
     val scanError by viewModel.scanner.lastError.collectAsState()
 
     var showDevices by remember { mutableStateOf(false) }
+    var showCalibration by remember { mutableStateOf(false) }
+
+    // La telemetria periodica pisa el eco de la calibracion a los pocos cientos de
+    // milisegundos, asi que se retiene aparte. Si no, la confirmacion aparece y
+    // desaparece antes de que alcance a leerse.
+    var trimEcho by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(telemetry) {
+        if (telemetry.startsWith("TRIM")) trimEcho = telemetry
+    }
 
     Box(
         modifier = Modifier
@@ -90,7 +99,7 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
                     deviceName = deviceName,
                     leftPower = viewModel.wheelPower.left,
                     rightPower = viewModel.wheelPower.right,
-                    onSettings = { showDevices = true }
+                    onSettings = { showCalibration = true }
                 )
 
                 Row(
@@ -169,6 +178,135 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
             },
             onDismiss = { showDevices = false }
         )
+    }
+
+    if (showCalibration) {
+        CalibrationDialog(
+            trimLeft = viewModel.reverseTrimLeft,
+            trimRight = viewModel.reverseTrimRight,
+            echo = trimEcho,
+            onAdjustLeft = viewModel::adjustReverseTrimLeft,
+            onAdjustRight = viewModel::adjustReverseTrimRight,
+            onDismiss = { showCalibration = false }
+        )
+    }
+}
+
+/**
+ * Ajuste de la compensacion de reversa sin recompilar.
+ *
+ * Solo la reversa: el avance ya quedo calibrado y exponerlo aqui invitaria a desajustarlo
+ * sin querer. La ventana se puede dejar abierta mientras se maneja, que es justamente
+ * como conviene calibrar, probando y corrigiendo sobre la marcha.
+ */
+@Composable
+private fun CalibrationDialog(
+    trimLeft: Int,
+    trimRight: Int,
+    echo: String?,
+    onAdjustLeft: (Int) -> Unit,
+    onAdjustRight: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Neon.Surface,
+        titleContentColor = Neon.TextPrimary,
+        textContentColor = Neon.TextMuted,
+        title = { Text("Compensacion de reversa", fontSize = 16.sp) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = "Recorta la rueda que corre mas al retroceder. Solo afecta la " +
+                        "reversa; el avance no se toca.",
+                    color = Neon.TextMuted,
+                    fontSize = 11.sp
+                )
+
+                Spacer(Modifier.height(14.dp))
+                TrimRow("RUEDA IZQUIERDA", trimLeft, Neon.Cyan, onAdjustLeft)
+                Spacer(Modifier.height(10.dp))
+                TrimRow("RUEDA DERECHA", trimRight, Neon.Blue, onAdjustRight)
+
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = if (echo != null) {
+                        "Carro confirma: $echo"
+                    } else {
+                        "Esperando confirmacion del carro..."
+                    },
+                    color = if (echo != null) Neon.Ok else Neon.TextMuted,
+                    fontSize = 10.sp
+                )
+
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Baja de a 5 hasta pasarte, es decir hasta que el carro se " +
+                        "abra hacia el otro lado. Ahi el valor bueno queda entre las dos " +
+                        "ultimas pruebas. Debajo de 25 el acelerador deja de actuar sobre " +
+                        "esa rueda.",
+                    color = Neon.TextMuted,
+                    fontSize = 10.sp
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar", color = Neon.Cyan)
+            }
+        }
+    )
+}
+
+@Composable
+private fun TrimRow(
+    label: String,
+    value: Int,
+    accent: Color,
+    onAdjust: (Int) -> Unit
+) {
+    Column {
+        Text(
+            text = label,
+            color = accent.copy(alpha = 0.8f),
+            fontSize = 10.sp,
+            letterSpacing = 1.5.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            StepButton("-5", accent) { onAdjust(-5) }
+            StepButton("-1", accent) { onAdjust(-1) }
+
+            Text(
+                text = "$value%",
+                color = Neon.TextPrimary,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            StepButton("+1", accent) { onAdjust(1) }
+            StepButton("+5", accent) { onAdjust(5) }
+        }
+    }
+}
+
+@Composable
+private fun StepButton(label: String, accent: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(accent.copy(alpha = 0.12f))
+            .border(1.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }
 
