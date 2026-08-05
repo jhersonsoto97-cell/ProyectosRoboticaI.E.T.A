@@ -33,11 +33,17 @@ from collections import deque
 # Constantes espejo del firmware (src/main.cpp).
 # Cambiar una aqui obliga a cambiarla alla, y viceversa.
 # ----------------------------------------------------------
-PWM_MIN = 60
 PWM_MAX = 255
 RAMPA_PASO = 12
 TICK_MS = 10
 FAILSAFE_MS = 400
+
+# Compensacion entre motores. Espejo de las constantes del firmware: si se ajusta una
+# alla hay que ajustarla aqui, o el simulador dejara de predecir al carro real.
+TRIM_IZQUIERDA = 95
+TRIM_DERECHA = 100
+PWM_MIN_IZQUIERDA = 60
+PWM_MIN_DERECHA = 60
 
 # ----------------------------------------------------------
 # Parametros mecanicos del chasis 2WD tipico del proyecto.
@@ -68,16 +74,19 @@ HUD_W = 250
 TRAIL_STEP = 0.02   # metros entre puntos de la estela
 
 
-def escalar_potencia(crudo):
-    """Reparte el recorrido util del joystick sobre PWM_MIN..PWM_MAX.
+def escalar_potencia(crudo, pwm_min, trim):
+    """Reparte el recorrido util del joystick sobre pwm_min..techo.
 
-    Identica a la funcion del firmware: por debajo de PWM_MIN el motor solo zumba,
-    asi que mapear 0..255 sobre ese rango desperdiciaria un cuarto del stick.
+    Identica a la funcion del firmware: por debajo del piso de torque el motor solo
+    zumba, asi que mapear 0..255 sobre ese rango desperdiciaria un cuarto del stick.
+    El trim recorta el techo y no la salida ya calculada, para que los valores bajos
+    no terminen cayendo en la zona muerta del motor compensado.
     """
     if crudo == 0:
         return 0
+    techo = min(max((PWM_MAX * trim) // 100, pwm_min), PWM_MAX)
     magnitud = min(max(abs(crudo), 1), PWM_MAX)
-    magnitud = PWM_MIN + ((magnitud - 1) * (PWM_MAX - PWM_MIN)) // (PWM_MAX - 1)
+    magnitud = pwm_min + ((magnitud - 1) * (techo - pwm_min)) // (PWM_MAX - 1)
     return -magnitud if crudo < 0 else magnitud
 
 
@@ -92,17 +101,21 @@ class FirmwareModel:
         self._ultimo_paquete = 0.0
         self._deuda_tick = 0.0
 
+    def _aplicar(self, izquierda, derecha):
+        self.objetivo[0] = escalar_potencia(
+            max(-PWM_MAX, min(PWM_MAX, izquierda)), PWM_MIN_IZQUIERDA, TRIM_IZQUIERDA)
+        self.objetivo[1] = escalar_potencia(
+            max(-PWM_MAX, min(PWM_MAX, derecha)), PWM_MIN_DERECHA, TRIM_DERECHA)
+
     def recibir_paquete(self, izquierda, derecha):
-        self.objetivo[0] = escalar_potencia(max(-PWM_MAX, min(PWM_MAX, izquierda)))
-        self.objetivo[1] = escalar_potencia(max(-PWM_MAX, min(PWM_MAX, derecha)))
+        self._aplicar(izquierda, derecha)
         self._ultimo_paquete = time.monotonic()
         self.enlace_vivo = True
         self.failsafe_disparado = False
 
     def comando_manual(self, izquierda, derecha):
         """Entrada por teclado: enclavada, sin vigilancia de failsafe."""
-        self.objetivo[0] = escalar_potencia(max(-PWM_MAX, min(PWM_MAX, izquierda)))
-        self.objetivo[1] = escalar_potencia(max(-PWM_MAX, min(PWM_MAX, derecha)))
+        self._aplicar(izquierda, derecha)
         self.enlace_vivo = False
         self.failsafe_disparado = False
 

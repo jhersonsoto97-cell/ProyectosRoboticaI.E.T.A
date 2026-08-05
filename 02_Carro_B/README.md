@@ -105,13 +105,69 @@ un motor invertido de un giro pedido a proposito.
 La alternativa por hardware es intercambiar los dos cables de ese motor en el borne del
 L298N. Da el mismo resultado; la constante evita tener que desarmar.
 
+## Emparejar la velocidad de los motores
+
+Dos motorreductores del mismo lote nunca giran igual. La tolerancia de fabricacion de
+estos TT ronda el **20 %**, y a eso se suma la friccion propia de cada caja reductora.
+Con el mismo PWM uno empuja mas y el carro se abre hacia el lado del mas debil. No es
+un defecto del armado ni del codigo: es lo normal en motores sin realimentacion.
+
+Se corrige con cuatro constantes en `src/main.cpp`:
+
+```cpp
+const int16_t TRIM_IZQUIERDA = 95;       // recorta el techo del motor rapido
+const int16_t TRIM_DERECHA = 100;
+const int16_t PWM_MIN_IZQUIERDA = 60;    // piso de torque de cada motor
+const int16_t PWM_MIN_DERECHA = 60;
+```
+
+### Ajuste del trim, a velocidad de crucero
+
+1. Bateria **cargada**. Una bateria baja exagera la disparidad y la calibracion sale mal.
+2. Marcar una recta de 3 m en piso liso.
+3. En la app, poner **LIMITE en 70 %**. A fondo no sirve: el motor rapido ya esta en 255
+   y solo se puede compensar recortandolo, con lo que se pierde velocidad maxima.
+4. Soltar el carro sobre la linea con el acelerador al fondo y medir cuanto se desvia
+   lateralmente al cabo de los 3 m.
+5. Se abre hacia la derecha significa que la **izquierda** corre mas: bajar
+   `TRIM_IZQUIERDA`. Se abre hacia la izquierda: bajar `TRIM_DERECHA`.
+6. Punto de partida practico: **1 % de trim por cada 5 cm** de desviacion en 3 m.
+7. Repetir hasta que la desviacion baje de 10 cm. Mas fino que eso no se sostiene:
+   el piso, el desgaste de las llantas y la carga de la bateria mueven el resultado.
+
+Bajar siempre, nunca subir por encima de 100. El trim solo recorta.
+
+### Ajuste del piso, a baja velocidad
+
+Es donde mas se nota la diferencia, porque cada motor rompe la inercia a un PWM distinto.
+
+1. Levantar el carro y enviar **`T`**.
+2. Observar cual rueda arranca con dificultad o zumba antes de girar.
+3. Subir el `PWM_MIN_*` de esa rueda de a 5 hasta que ambas arranquen parejo.
+
+Subir el piso de la rueda floja, no bajar el de la otra: bajarlo la deja sin torque.
+
+### El arreglo de fondo
+
+Todo esto es **lazo abierto**: se compensa una disparidad medida una vez, y deja de
+valer cuando cambia la carga, el piso o la bateria. Las dos salidas reales son:
+
+| Opcion | Costo aprox. | Que resuelve |
+|---|---|---|
+| Encoders en las ruedas | 20.000 COP el par | Control de velocidad real por rueda con PID |
+| IMU MPU6050 | 12.000 COP | Mantiene el rumbo aunque las ruedas no coincidan |
+
+Para avanzar derecho el MPU6050 es la opcion mas barata y directa: cierra el lazo sobre
+lo que de verdad importa, que es el rumbo, en vez de sobre las revoluciones de cada rueda.
+
 ## Parametros de control
 
 Todos en `src/main.cpp`, arriba del archivo:
 
 | Constante | Valor | Que hace |
 |---|---|---|
-| `PWM_MIN` | 60 | Piso de torque. Debajo de este PWM el motor zumba pero no gira. El rango util del joystick se reparte sobre `PWM_MIN..255`, no sobre `0..255` |
+| `PWM_MIN_IZQUIERDA` / `_DERECHA` | 60 | Piso de torque de cada motor. Debajo de ese PWM zumba pero no gira. El rango util del joystick se reparte sobre `PWM_MIN..techo`, no sobre `0..255` |
+| `TRIM_IZQUIERDA` / `_DERECHA` | 95 / 100 | Recorta el techo del motor mas rapido para que el carro avance derecho |
 | `RAMPA_PASO` | 12 | Cambio maximo de PWM por tick. Limita el `di/dt` del arranque para que el pico de corriente no reinicie el Mega. 0 a 255 en ~210 ms |
 | `TICK_MS` | 10 | Periodo del lazo de rampa. Fija la pendiente real de aceleracion |
 | `FAILSAFE_MS` | 400 | Si el enlace analogico se corta por mas de este tiempo, el carro frena solo |
