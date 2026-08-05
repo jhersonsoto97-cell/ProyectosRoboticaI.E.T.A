@@ -1,5 +1,6 @@
 package com.ieta.smartcar.ui
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -66,12 +68,20 @@ fun JoystickPad(
         label = "settle"
     )
 
-    Box(modifier = modifier.size(diameter)) {
+    val view = LocalView.current
+
+    // El area sensible desborda al dibujo. Manejando no se mira la pantalla, y exigir
+    // que el pulgar caiga justo dentro del circulo obliga a mirarla; con el margen basta
+    // con apoyar el dedo por la zona.
+    Box(
+        modifier = modifier.size(diameter + TOUCH_MARGIN * 2),
+        contentAlignment = Alignment.Center
+    ) {
         Canvas(
             modifier = Modifier
-                .size(diameter)
+                .matchParentSize()
                 .pointerInput(axis) {
-                    val radius = minOf(size.width, size.height) / 2f
+                    val radius = (diameter.toPx() / 2f)
                     val knobRadius = radius * 0.30f
                     val travel = radius - knobRadius - 8.dp.toPx()
                     val center = Offset(size.width / 2f, size.height / 2f)
@@ -92,6 +102,9 @@ fun JoystickPad(
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         pressed = true
+                        // Confirma por el tacto que el stick quedo tomado, sin tener que
+                        // apartar la vista del carro para comprobarlo.
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         publish(down.position)
                         down.consume()
 
@@ -110,7 +123,9 @@ fun JoystickPad(
                     }
                 }
         ) {
-            val radius = size.minDimension / 2f
+            // El radio sale del diametro visible, no del lienzo: este ultimo incluye el
+            // margen sensible y dibujar contra el agrandaria el stick sin querer.
+            val radius = diameter.toPx() / 2f
             val center = Offset(size.width / 2f, size.height / 2f)
             val knobRadius = radius * 0.30f
             val travel = radius - knobRadius - 8.dp.toPx()
@@ -134,10 +149,13 @@ fun JoystickPad(
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = diameter * 0.06f)
+                .padding(bottom = TOUCH_MARGIN + diameter * 0.06f)
         )
     }
 }
+
+/** Cuanto desborda el area sensible al circulo dibujado. */
+private val TOUCH_MARGIN = 22.dp
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBase(
     center: Offset,

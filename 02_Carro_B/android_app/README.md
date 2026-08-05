@@ -38,6 +38,48 @@ sdk.dir=C\:\\Users\\TU_USUARIO\\AppData\\Local\\Android\\Sdk
 El APK queda en `app/build/outputs/apk/debug/app-debug.apk` (~8.4 MB). Se copia al
 telefono y se instala directo; no requiere Play Store.
 
+### Build de release, para repartir
+
+```powershell
+cd 02_Carro_B\android_app
+.\gradlew assembleRelease
+```
+
+Queda en `app/build/outputs/apk/release/app-release.apk`, alrededor de **1 MB** contra
+los 8.5 MB del debug. La diferencia la hace R8, que descarta las clases y los recursos
+de Compose que la app no usa.
+
+**El release y el debug se firman con claves distintas**, y Android no deja actualizar
+una instalacion cambiando de clave. Para pasar de una version debug a una release hay
+que **desinstalar primero** en cada telefono. De ahi en adelante las actualizaciones
+release sobre release funcionan normal.
+
+#### La clave de firma
+
+Vive en `keystore/ieta-smartcar.jks` con sus datos en `keystore.properties`, y **ninguno
+de los dos entra al repositorio**: quien tenga ese archivo puede publicar actualizaciones
+que Android acepta como si vinieran de la app original.
+
+**Respaldalo.** Si se pierde, las instalaciones existentes ya no se pueden actualizar y
+hay que desinstalar en cada telefono para poner una version firmada con otra clave.
+
+Quien clone el repositorio sin el `.jks` igual puede compilar: el release cae a la clave
+de depuracion en vez de fallar. Para generar una clave propia:
+
+```powershell
+keytool -genkeypair -v -keystore keystore\ieta-smartcar.jks -alias smartcar `
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Y crear `keystore.properties` junto a `settings.gradle.kts`:
+
+```properties
+storeFile=keystore/ieta-smartcar.jks
+storePassword=tu_clave
+keyAlias=smartcar
+keyPassword=tu_clave
+```
+
 ### Desde Android Studio
 
 1. **File > Open** y seleccionar `02_Carro_B/android_app`.
@@ -88,6 +130,16 @@ Desde un telefono real por WiFi funciona igual, cambiando `10.0.2.2` por la IP d
 5. Manejar. El LED del HC-05 queda encendido fijo mientras hay enlace.
 
 ### Controles
+
+Los sticks van anclados a las esquinas de abajo, donde descansan los pulgares
+sosteniendo el telefono con las dos manos, y su area sensible **desborda al circulo
+dibujado**: manejando no se mira la pantalla, y exigir que el dedo caiga justo adentro
+obliga a mirarla.
+
+La respuesta no es lineal sino **expo**, como en las emisoras de radiocontrol. Con
+respuesta lineal el tramo util del pulgar se gasta en la mitad alta del recorrido y
+maniobrar despacio se vuelve imposible; la curva achata el centro y conserva el extremo,
+de modo que se gana precision sin perder velocidad maxima.
 
 | Elemento | Funcion |
 |---|---|

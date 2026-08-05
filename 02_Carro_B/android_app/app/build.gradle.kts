@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// La clave de firma no entra al repositorio: quien tenga el .jks puede publicar
+// actualizaciones que Android acepta como si fueran de la app original.
+val keystoreProperties = Properties().apply {
+    val archivo = rootProject.file("keystore.properties")
+    if (archivo.exists()) archivo.inputStream().use { load(it) }
+}
+val hayClaveDeRelease = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.ieta.smartcar"
@@ -12,17 +22,42 @@ android {
         applicationId = "com.ieta.smartcar"
         minSdk = 24
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "2.0"
+    }
+
+    signingConfigs {
+        if (hayClaveDeRelease) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 elimina las clases de Compose que la app no usa. La app no depende de
+            // reflexion sobre codigo propio, asi que no hay nada que preservar a mano:
+            // la unica reflexion apunta a metodos ocultos de BluetoothDevice, que es una
+            // clase del sistema y R8 no toca.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
+            // Sin keystore.properties el release se firma con la clave de depuracion.
+            // Asi cualquiera puede compilar el proyecto sin tener el .jks, en vez de
+            // toparse con un APK sin firmar que no se puede instalar.
+            signingConfig = if (hayClaveDeRelease) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

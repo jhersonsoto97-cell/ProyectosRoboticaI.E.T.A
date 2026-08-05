@@ -89,69 +89,73 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
             // hasta una tablet sin recortarse.
             val stickDiameter = (maxHeight * 0.52f).coerceIn(150.dp, 260.dp)
 
-            Column(
+            TopBar(
+                linkState = linkState,
+                deviceName = deviceName,
+                leftPower = viewModel.wheelPower.left,
+                rightPower = viewModel.wheelPower.right,
+                onSettings = { showCalibration = true },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp, vertical = 12.dp)
-            ) {
-                TopBar(
-                    linkState = linkState,
-                    deviceName = deviceName,
-                    leftPower = viewModel.wheelPower.left,
-                    rightPower = viewModel.wheelPower.right,
-                    onSettings = { showCalibration = true }
-                )
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 18.dp, vertical = 10.dp)
+            )
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    JoystickPad(
-                        label = if (viewModel.mode == DriveMode.ARCADE) "ACELERADOR" else "ORUGA IZQ",
-                        axis = StickAxis.VERTICAL,
-                        diameter = stickDiameter,
-                        accent = Neon.Cyan,
-                        onChange = viewModel::onLeftStick
-                    )
+            // Los sticks van anclados a las esquinas de abajo y no centrados a media
+            // altura: sosteniendo el telefono con las dos manos, los pulgares descansan
+            // ahi. Centrarlos obliga a estirar el pulgar en cada maniobra.
+            JoystickPad(
+                label = if (viewModel.mode == DriveMode.ARCADE) "ACELERADOR" else "ORUGA IZQ",
+                axis = StickAxis.VERTICAL,
+                diameter = stickDiameter,
+                accent = Neon.Cyan,
+                onChange = viewModel::onLeftStick,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 10.dp, bottom = 6.dp)
+            )
 
-                    CenterConsole(
-                        linkState = linkState,
-                        telemetry = telemetry,
-                        error = lastError,
-                        onToggleConnection = {
-                            if (linkState == LinkState.CONNECTED) {
-                                viewModel.disconnect()
-                            } else {
-                                showDevices = true
-                            }
-                        }
-                    )
+            JoystickPad(
+                label = if (viewModel.mode == DriveMode.ARCADE) "DIRECCION" else "ORUGA DER",
+                axis = if (viewModel.mode == DriveMode.ARCADE) {
+                    StickAxis.HORIZONTAL
+                } else {
+                    StickAxis.VERTICAL
+                },
+                diameter = stickDiameter,
+                accent = Neon.Blue,
+                onChange = viewModel::onRightStick,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 10.dp, bottom = 6.dp)
+            )
 
-                    JoystickPad(
-                        label = if (viewModel.mode == DriveMode.ARCADE) "DIRECCION" else "ORUGA DER",
-                        axis = if (viewModel.mode == DriveMode.ARCADE) {
-                            StickAxis.HORIZONTAL
-                        } else {
-                            StickAxis.VERTICAL
-                        },
-                        diameter = stickDiameter,
-                        accent = Neon.Blue,
-                        onChange = viewModel::onRightStick
-                    )
-                }
+            CenterConsole(
+                linkState = linkState,
+                telemetry = telemetry,
+                error = lastError,
+                onToggleConnection = {
+                    if (linkState == LinkState.CONNECTED) {
+                        viewModel.disconnect()
+                    } else {
+                        showDevices = true
+                    }
+                },
+                // Centrada en el pasillo que queda entre los dos sticks. Anclarla arriba
+                // dejaba un hueco muerto en el medio de la pantalla.
+                modifier = Modifier.align(Alignment.Center)
+            )
 
-                BottomBar(
-                    mode = viewModel.mode,
-                    speedCapLabel = viewModel.speedCapLabel,
-                    emergencyStop = viewModel.emergencyStop,
-                    onToggleMode = viewModel::toggleMode,
-                    onCycleSpeed = viewModel::cycleSpeedCap,
-                    onEmergencyStop = viewModel::toggleEmergencyStop
-                )
-            }
+            BottomBar(
+                mode = viewModel.mode,
+                speedCapLabel = viewModel.speedCapLabel,
+                emergencyStop = viewModel.emergencyStop,
+                onToggleMode = viewModel::toggleMode,
+                onCycleSpeed = viewModel::cycleSpeedCap,
+                onEmergencyStop = viewModel::toggleEmergencyStop,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 14.dp)
+            )
         }
     }
 
@@ -316,10 +320,11 @@ private fun TopBar(
     deviceName: String?,
     leftPower: Int,
     rightPower: Int,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         StatusChip(text = statusText(linkState, deviceName), color = statusColor(linkState))
@@ -360,13 +365,14 @@ private fun CenterConsole(
     linkState: LinkState,
     telemetry: String,
     error: String?,
-    onToggleConnection: () -> Unit
+    onToggleConnection: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val accent = statusColor(linkState)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(150.dp)
+        modifier = modifier.width(190.dp)
     ) {
         Box(
             modifier = Modifier
@@ -420,12 +426,11 @@ private fun BottomBar(
     emergencyStop: Boolean,
     onToggleMode: () -> Unit,
     onCycleSpeed: () -> Unit,
-    onEmergencyStop: () -> Unit
+    onEmergencyStop: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(84.dp),
+        modifier = modifier.height(84.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {

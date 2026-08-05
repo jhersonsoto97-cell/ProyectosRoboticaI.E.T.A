@@ -15,6 +15,16 @@ object DriveMixer {
     /** Zona muerta: el dedo nunca suelta el stick exactamente en el centro. */
     const val DEADZONE = 0.08f
 
+    /**
+     * Curva expo, tomada de las emisoras de radiocontrol.
+     *
+     * Con respuesta lineal, el tramo util del pulgar se gasta en la mitad alta del
+     * recorrido: cualquier toque pequeno ya manda mucha potencia y maniobrar despacio se
+     * vuelve imposible. La curva achata el centro y conserva el extremo, de modo que se
+     * gana precision donde hace falta sin perder velocidad maxima.
+     */
+    private const val EXPO = 0.45f
+
     fun mix(
         mode: DriveMode,
         leftStickY: Float,
@@ -25,15 +35,21 @@ object DriveMixer {
     ): WheelPower = when (mode) {
         // Stick izquierdo = acelerador, stick derecho = direccion. Manejo tipo consola.
         DriveMode.ARCADE -> arcade(
-            throttle = applyDeadzone(leftStickY),
-            steer = applyDeadzone(rightStickX),
+            throttle = shape(leftStickY),
+            steer = shape(rightStickX),
             speedCap = speedCap
         )
         // Cada stick manda su propia oruga. Control total, curva de aprendizaje mas dura.
         DriveMode.TANK -> WheelPower(
-            left = toPwm(applyDeadzone(leftStickY) * speedCap),
-            right = toPwm(applyDeadzone(rightStickY) * speedCap)
+            left = toPwm(shape(leftStickY) * speedCap),
+            right = toPwm(shape(rightStickY) * speedCap)
         )
+    }
+
+    /** Zona muerta y curva expo, en ese orden: la curva actua sobre el valor ya limpio. */
+    private fun shape(value: Float): Float {
+        val limpio = applyDeadzone(value)
+        return EXPO * limpio * limpio * limpio + (1f - EXPO) * limpio
     }
 
     private fun arcade(throttle: Float, steer: Float, speedCap: Float): WheelPower {

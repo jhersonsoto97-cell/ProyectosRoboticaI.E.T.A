@@ -9,4 +9,12 @@ captures/
 .cxx/
 *.apk
 *.aab
+
+# Clave de firma. Quien la tenga puede publicar actualizaciones que Android acepta como
+# si fueran de la app original, asi que no entra al repositorio. Hay que respaldarla
+# aparte: si se pierde, las instalaciones existentes ya no se pueden actualizar y hay
+# que desinstalar en cada telefono.
 *.keystore
+*.jks
+keystore/
+keystore.properties

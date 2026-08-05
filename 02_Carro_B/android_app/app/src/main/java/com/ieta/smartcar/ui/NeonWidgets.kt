@@ -1,5 +1,6 @@
 package com.ieta.smartcar.ui
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -172,6 +174,7 @@ fun NeonRoundButton(
         targetValue = if (active) accent else Neon.Outline,
         label = "ring"
     )
+    val view = LocalView.current
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Box(
@@ -180,7 +183,12 @@ fun NeonRoundButton(
                 .clip(CircleShape)
                 .background(if (active) accent.copy(alpha = 0.14f) else Neon.Surface)
                 .border(1.5.dp, ring, CircleShape)
-                .clickable(onClick = onClick),
+                .clickable {
+                    // Confirmacion tactil: manejando no se mira la pantalla, y un boton
+                    // que no responde invita a tocarlo dos veces.
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    onClick()
+                },
             contentAlignment = Alignment.Center
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
