@@ -1,5 +1,6 @@
 package com.ieta.smartcar.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,13 +38,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ieta.smartcar.ControllerViewModel
+import com.ieta.smartcar.R
 import com.ieta.smartcar.control.DriveMode
 import com.ieta.smartcar.link.BtDevice
 import com.ieta.smartcar.link.LinkState
@@ -98,6 +102,19 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(horizontal = 18.dp, vertical = 10.dp)
+            )
+
+            // Logo del autor, en la franja que queda libre entre la barra superior y la
+            // consola. Es la unica zona central donde no hay nada que tocar, asi que se
+            // ve de frente sin quedar nunca bajo el pulgar ni tapar un control.
+            Image(
+                painter = painterResource(R.drawable.ic_brand),
+                contentDescription = null,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = maxHeight * 0.17f)
+                    .height((maxHeight * 0.16f).coerceIn(40.dp, 72.dp))
+                    .alpha(0.65f)
             )
 
             // Los sticks van anclados a las esquinas de abajo y no centrados a media
