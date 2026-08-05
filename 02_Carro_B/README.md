@@ -112,14 +112,42 @@ estos TT ronda el **20 %**, y a eso se suma la friccion propia de cada caja redu
 Con el mismo PWM uno empuja mas y el carro se abre hacia el lado del mas debil. No es
 un defecto del armado ni del codigo: es lo normal en motores sin realimentacion.
 
-Se corrige con cuatro constantes en `src/main.cpp`:
+Se corrige con seis constantes en `src/main.cpp`:
 
 ```cpp
-const int16_t TRIM_IZQUIERDA = 95;       // recorta el techo del motor rapido
-const int16_t TRIM_DERECHA = 100;
-const int16_t PWM_MIN_IZQUIERDA = 60;    // piso de torque de cada motor
+const int16_t TRIM_IZQUIERDA_ADELANTE = 75;   // recorta el techo del motor rapido
+const int16_t TRIM_IZQUIERDA_ATRAS = 88;
+const int16_t TRIM_DERECHA_ADELANTE = 100;
+const int16_t TRIM_DERECHA_ATRAS = 100;
+const int16_t PWM_MIN_IZQUIERDA = 60;         // piso de torque de cada motor
 const int16_t PWM_MIN_DERECHA = 60;
 ```
+
+### Por que adelante y atras se ajustan por separado
+
+Un motor DC no es simetrico. El calado de las escobillas y el juego de la caja reductora
+cambian con el sentido de giro, asi que la disparidad entre las dos ruedas no es la misma
+avanzando que retrocediendo. Un trim afinado solo con el carro avanzando **sobre-corrige
+en reversa** e invierte la deriva: el carro deja de abrirse hacia un lado y empieza a
+abrirse hacia el otro.
+
+### Que rueda es la fuerte, segun hacia donde gira el carro
+
+Con `w = (v_derecha - v_izquierda) / ancho_de_via`, y `w` negativo igual a giro horario
+visto desde arriba:
+
+| Sentido de marcha | El carro se abre | Rueda mas fuerte |
+|---|---|---|
+| Adelante | Horario (a la derecha) | Izquierda |
+| Adelante | Antihorario (a la izquierda) | Derecha |
+| Reversa | Horario | **Derecha** |
+| Reversa | Antihorario | **Izquierda** |
+
+En reversa la relacion se invierte respecto del avance. Es el error facil de cometer:
+el carro gira igual que cuando avanza con la izquierda fuerte, pero la culpable es la otra.
+
+Para confirmarlo sin depender de la geometria, enviar **`T`** y comparar las fases
+**2/4** (izquierda atras) y **4/4** (derecha atras): giran una por vez y se oye cual corre mas.
 
 ### Ajuste del trim, a velocidad de crucero
 
@@ -136,6 +164,16 @@ const int16_t PWM_MIN_DERECHA = 60;
    el piso, el desgaste de las llantas y la carga de la bateria mueven el resultado.
 
 Bajar siempre, nunca subir por encima de 100. El trim solo recorta.
+
+### Repetir el ajuste en reversa
+
+Con el avance ya derecho, hacer lo mismo retrocediendo y tocando solo los `_ATRAS`.
+Los valores de avance quedan fijos: cada sentido se ajusta contra su propia deriva.
+
+Si un extremo sobre-corrige y el otro se queda corto, conviene ir por bisección en vez
+de a tientas. Con `75` girando horario y `100` girando antihorario, el valor bueno esta
+en el medio: se prueba `88`, y segun hacia donde gire se busca entre `75` y `88` o entre
+`88` y `100`. Tres o cuatro pruebas alcanzan.
 
 ### Ajuste del piso, a baja velocidad
 
@@ -167,7 +205,7 @@ Todos en `src/main.cpp`, arriba del archivo:
 | Constante | Valor | Que hace |
 |---|---|---|
 | `PWM_MIN_IZQUIERDA` / `_DERECHA` | 60 | Piso de torque de cada motor. Debajo de ese PWM zumba pero no gira. El rango util del joystick se reparte sobre `PWM_MIN..techo`, no sobre `0..255` |
-| `TRIM_IZQUIERDA` / `_DERECHA` | 95 / 100 | Recorta el techo del motor mas rapido para que el carro avance derecho |
+| `TRIM_*_ADELANTE` / `_ATRAS` | 75 / 88 / 100 | Recorta el techo del motor mas rapido. Cada sentido lleva el suyo porque un motor DC no es simetrico |
 | `RAMPA_PASO` | 12 | Cambio maximo de PWM por tick. Limita el `di/dt` del arranque para que el pico de corriente no reinicie el Mega. 0 a 255 en ~210 ms |
 | `TICK_MS` | 10 | Periodo del lazo de rampa. Fija la pendiente real de aceleracion |
 | `FAILSAFE_MS` | 400 | Si el enlace analogico se corta por mas de este tiempo, el carro frena solo |

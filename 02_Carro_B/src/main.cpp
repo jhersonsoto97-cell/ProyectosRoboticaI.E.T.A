@@ -62,12 +62,19 @@ const bool INVERTIR_DERECHA = false;
 // se acelera: a fondo el motor fuerte ya esta en 255 y no queda margen hacia arriba,
 // asi que emparejar cuesta un poco de velocidad maxima.
 //
+// Adelante y atras llevan su propio trim porque un motor DC no es simetrico: el calado
+// de las escobillas y el juego de la caja reductora cambian con el sentido de giro. Un
+// valor afinado solo para el avance sobre-corrige en reversa e invierte la deriva, que
+// es exactamente lo que ocurrio con un trim unico.
+//
 // PWM_MIN_* es el piso de torque de cada motor. Tampoco es igual entre unidades, y es
 // justo a baja velocidad donde mas se nota la diferencia.
 //
 // Procedimiento de ajuste en el README, seccion "Emparejar la velocidad de los motores".
-const int16_t TRIM_IZQUIERDA = 95;       // Punto de partida: la izquierda vence a la derecha.
-const int16_t TRIM_DERECHA = 100;
+const int16_t TRIM_IZQUIERDA_ADELANTE = 75;   // Medido: la izquierda vence al avanzar.
+const int16_t TRIM_IZQUIERDA_ATRAS = 88;      // A ajustar: 75 sobre-corrige, 100 no alcanza.
+const int16_t TRIM_DERECHA_ADELANTE = 100;
+const int16_t TRIM_DERECHA_ATRAS = 100;
 const int16_t PWM_MIN_IZQUIERDA = 60;
 const int16_t PWM_MIN_DERECHA = 60;
 
@@ -102,7 +109,9 @@ bool capturandoPaquete = false;
 
 // Declaraciones anticipadas de las funciones usadas por el programa.
 void configurarPines();
-int16_t escalarPotencia(int16_t crudo, int16_t pwmMin, int16_t trim);
+int16_t escalarPotencia(int16_t crudo, int16_t pwmMin, int16_t trimAdelante, int16_t trimAtras);
+int16_t potenciaIzquierda(int16_t crudo);
+int16_t potenciaDerecha(int16_t crudo);
 int16_t acercarConRampa(int16_t actual, int16_t objetivo);
 void aplicarCanal(uint8_t pinEnable, uint8_t pinDirectoA, uint8_t pinDirectoB,
                   int16_t potencia, bool invertir);
@@ -166,11 +175,12 @@ void configurarPines() {
 // El trim recorta el techo y no la salida ya calculada: recortarla al final empujaria
 // los valores bajos por debajo del piso de torque, y el motor compensado se quedaria
 // quieto justo donde mas falta hace la precision.
-int16_t escalarPotencia(int16_t crudo, int16_t pwmMin, int16_t trim) {
+int16_t escalarPotencia(int16_t crudo, int16_t pwmMin, int16_t trimAdelante, int16_t trimAtras) {
   if (crudo == 0) {
     return 0;
   }
 
+  const int16_t trim = (crudo > 0) ? trimAdelante : trimAtras;
   const int16_t techo = constrain(
       static_cast<int16_t>((static_cast<int32_t>(PWM_MAX) * trim) / 100), pwmMin, PWM_MAX);
 
@@ -179,6 +189,19 @@ int16_t escalarPotencia(int16_t crudo, int16_t pwmMin, int16_t trim) {
       (static_cast<int32_t>(magnitud - 1) * (techo - pwmMin)) / (PWM_MAX - 1));
 
   return (crudo < 0) ? static_cast<int16_t>(-magnitud) : magnitud;
+}
+
+// Atajos que atan cada rueda a sus propias constantes. Evitan que un punto de uso
+// mezcle el piso de un motor con el trim del otro, que es un error silencioso: el
+// carro simplemente se abriria un poco y nadie sabria por que.
+int16_t potenciaIzquierda(int16_t crudo) {
+  return escalarPotencia(crudo, PWM_MIN_IZQUIERDA,
+                         TRIM_IZQUIERDA_ADELANTE, TRIM_IZQUIERDA_ATRAS);
+}
+
+int16_t potenciaDerecha(int16_t crudo) {
+  return escalarPotencia(crudo, PWM_MIN_DERECHA,
+                         TRIM_DERECHA_ADELANTE, TRIM_DERECHA_ATRAS);
 }
 
 // Acerca la salida al objetivo sin saltos. Al invertir el sentido pasa por cero,
@@ -253,8 +276,8 @@ void procesarPaqueteAnalogico(char *texto) {
   const int16_t crudoIzquierda = constrain(atoi(texto), -PWM_MAX, PWM_MAX);
   const int16_t crudoDerecha = constrain(atoi(separador + 1), -PWM_MAX, PWM_MAX);
 
-  objetivoIzquierda = escalarPotencia(crudoIzquierda, PWM_MIN_IZQUIERDA, TRIM_IZQUIERDA);
-  objetivoDerecha = escalarPotencia(crudoDerecha, PWM_MIN_DERECHA, TRIM_DERECHA);
+  objetivoIzquierda = potenciaIzquierda(crudoIzquierda);
+  objetivoDerecha = potenciaDerecha(crudoDerecha);
 
   marcaUltimoPaquete = millis();          // Alimenta el failsafe.
   enlaceAnalogicoVivo = true;
@@ -273,16 +296,31 @@ void procesarComandoDiscreto(char comando, char origen) {
     return;
   }
 
-  // Velocidad comoda para modo discreto, con la compensacion propia de cada rueda.
-  const int16_t potIzq = escalarPotencia(200, PWM_MIN_IZQUIERDA, TRIM_IZQUIERDA);
-  const int16_t potDer = escalarPotencia(200, PWM_MIN_DERECHA, TRIM_DERECHA);
+  // Velocidad comoda para modo discreto. Se pasa el valor con signo, no la magnitud,
+  // porque cada sentido lleva su propio trim.
+  const int16_t nivel = 200;
 
   switch (comando) {
-    case 'A': objetivoIzquierda =  potIzq; objetivoDerecha =  potDer; break;
-    case 'R': objetivoIzquierda = -potIzq; objetivoDerecha = -potDer; break;
-    case 'I': objetivoIzquierda = -potIzq; objetivoDerecha =  potDer; break;
-    case 'D': objetivoIzquierda =  potIzq; objetivoDerecha = -potDer; break;
-    case 'S': objetivoIzquierda =  0;        objetivoDerecha =  0;        break;
+    case 'A':
+      objetivoIzquierda = potenciaIzquierda(nivel);
+      objetivoDerecha = potenciaDerecha(nivel);
+      break;
+    case 'R':
+      objetivoIzquierda = potenciaIzquierda(-nivel);
+      objetivoDerecha = potenciaDerecha(-nivel);
+      break;
+    case 'I':
+      objetivoIzquierda = potenciaIzquierda(-nivel);
+      objetivoDerecha = potenciaDerecha(nivel);
+      break;
+    case 'D':
+      objetivoIzquierda = potenciaIzquierda(nivel);
+      objetivoDerecha = potenciaDerecha(-nivel);
+      break;
+    case 'S':
+      objetivoIzquierda = 0;
+      objetivoDerecha = 0;
+      break;
     case 'T': ejecutarPruebaDeSentido();                                  return;
     default:
       Serial.print(F("Comando no valido ("));
@@ -310,22 +348,23 @@ void procesarComandoDiscreto(char comando, char origen) {
   Levantar el carro antes de ejecutarla: se mueve solo durante unos segundos.
 */
 void ejecutarPruebaDeSentido() {
-  const int16_t potIzq = escalarPotencia(150, PWM_MIN_IZQUIERDA, TRIM_IZQUIERDA);
-  const int16_t potDer = escalarPotencia(150, PWM_MIN_DERECHA, TRIM_DERECHA);
+  // Nivel medio y con signo, para que cada fase salga con el trim de su sentido y la
+  // prueba refleje la potencia real que recibira esa rueda al manejar.
+  const int16_t nivel = 150;
 
   Serial.println(F("PRUEBA DE SENTIDO. Levanta el carro para ver girar las ruedas."));
 
   Serial.print(F("  1/4 IZQUIERDA hacia ADELANTE"));
-  probarCanal(PIN_ENA, PIN_IN1, PIN_IN2, potIzq, INVERTIR_IZQUIERDA);
+  probarCanal(PIN_ENA, PIN_IN1, PIN_IN2, potenciaIzquierda(nivel), INVERTIR_IZQUIERDA);
 
   Serial.print(F("  2/4 IZQUIERDA hacia ATRAS   "));
-  probarCanal(PIN_ENA, PIN_IN1, PIN_IN2, -potIzq, INVERTIR_IZQUIERDA);
+  probarCanal(PIN_ENA, PIN_IN1, PIN_IN2, potenciaIzquierda(-nivel), INVERTIR_IZQUIERDA);
 
   Serial.print(F("  3/4 DERECHA hacia ADELANTE  "));
-  probarCanal(PIN_ENB, PIN_IN3, PIN_IN4, potDer, INVERTIR_DERECHA);
+  probarCanal(PIN_ENB, PIN_IN3, PIN_IN4, potenciaDerecha(nivel), INVERTIR_DERECHA);
 
   Serial.print(F("  4/4 DERECHA hacia ATRAS     "));
-  probarCanal(PIN_ENB, PIN_IN3, PIN_IN4, -potDer, INVERTIR_DERECHA);
+  probarCanal(PIN_ENB, PIN_IN3, PIN_IN4, potenciaDerecha(-nivel), INVERTIR_DERECHA);
 
   Serial.println(F("FIN."));
   Serial.println(F("  Si una rueda giro al reves en ambas fases: cambia su INVERTIR_*."));

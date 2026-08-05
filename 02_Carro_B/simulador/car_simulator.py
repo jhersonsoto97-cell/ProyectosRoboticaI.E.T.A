@@ -40,8 +40,10 @@ FAILSAFE_MS = 400
 
 # Compensacion entre motores. Espejo de las constantes del firmware: si se ajusta una
 # alla hay que ajustarla aqui, o el simulador dejara de predecir al carro real.
-TRIM_IZQUIERDA = 95
-TRIM_DERECHA = 100
+TRIM_IZQUIERDA_ADELANTE = 75
+TRIM_IZQUIERDA_ATRAS = 88
+TRIM_DERECHA_ADELANTE = 100
+TRIM_DERECHA_ATRAS = 100
 PWM_MIN_IZQUIERDA = 60
 PWM_MIN_DERECHA = 60
 
@@ -74,16 +76,18 @@ HUD_W = 250
 TRAIL_STEP = 0.02   # metros entre puntos de la estela
 
 
-def escalar_potencia(crudo, pwm_min, trim):
+def escalar_potencia(crudo, pwm_min, trim_adelante, trim_atras):
     """Reparte el recorrido util del joystick sobre pwm_min..techo.
 
     Identica a la funcion del firmware: por debajo del piso de torque el motor solo
     zumba, asi que mapear 0..255 sobre ese rango desperdiciaria un cuarto del stick.
     El trim recorta el techo y no la salida ya calculada, para que los valores bajos
-    no terminen cayendo en la zona muerta del motor compensado.
+    no terminen cayendo en la zona muerta del motor compensado. Cada sentido lleva su
+    propio trim porque un motor DC no se comporta igual hacia adelante que hacia atras.
     """
     if crudo == 0:
         return 0
+    trim = trim_adelante if crudo > 0 else trim_atras
     techo = min(max((PWM_MAX * trim) // 100, pwm_min), PWM_MAX)
     magnitud = min(max(abs(crudo), 1), PWM_MAX)
     magnitud = pwm_min + ((magnitud - 1) * (techo - pwm_min)) // (PWM_MAX - 1)
@@ -103,9 +107,11 @@ class FirmwareModel:
 
     def _aplicar(self, izquierda, derecha):
         self.objetivo[0] = escalar_potencia(
-            max(-PWM_MAX, min(PWM_MAX, izquierda)), PWM_MIN_IZQUIERDA, TRIM_IZQUIERDA)
+            max(-PWM_MAX, min(PWM_MAX, izquierda)), PWM_MIN_IZQUIERDA,
+            TRIM_IZQUIERDA_ADELANTE, TRIM_IZQUIERDA_ATRAS)
         self.objetivo[1] = escalar_potencia(
-            max(-PWM_MAX, min(PWM_MAX, derecha)), PWM_MIN_DERECHA, TRIM_DERECHA)
+            max(-PWM_MAX, min(PWM_MAX, derecha)), PWM_MIN_DERECHA,
+            TRIM_DERECHA_ADELANTE, TRIM_DERECHA_ATRAS)
 
     def recibir_paquete(self, izquierda, derecha):
         self._aplicar(izquierda, derecha)
