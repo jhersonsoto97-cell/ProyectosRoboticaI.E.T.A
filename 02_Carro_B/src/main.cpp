@@ -71,8 +71,12 @@ const bool INVERTIR_DERECHA = false;
 // justo a baja velocidad donde mas se nota la diferencia.
 //
 // Procedimiento de ajuste en el README, seccion "Emparejar la velocidad de los motores".
-const int16_t TRIM_IZQUIERDA_ADELANTE = 75;   // Medido: la izquierda vence al avanzar.
-const int16_t TRIM_IZQUIERDA_ATRAS = 88;      // A ajustar: 75 sobre-corrige, 100 no alcanza.
+// La izquierda vence en los dos sentidos, y en reversa lo hace todavia mas: por eso su
+// trim de atras es mas agresivo que el de adelante. Observado rueda por rueda con 'T',
+// que es lo unico confiable: mirar hacia donde gira el carro se presta a confusion
+// cuando retrocede, porque el sentido aparente depende de desde donde se lo mire.
+const int16_t TRIM_IZQUIERDA_ADELANTE = 75;
+const int16_t TRIM_IZQUIERDA_ATRAS = 60;
 const int16_t TRIM_DERECHA_ADELANTE = 100;
 const int16_t TRIM_DERECHA_ATRAS = 100;
 const int16_t PWM_MIN_IZQUIERDA = 60;

@@ -41,7 +41,7 @@ FAILSAFE_MS = 400
 # Compensacion entre motores. Espejo de las constantes del firmware: si se ajusta una
 # alla hay que ajustarla aqui, o el simulador dejara de predecir al carro real.
 TRIM_IZQUIERDA_ADELANTE = 75
-TRIM_IZQUIERDA_ATRAS = 88
+TRIM_IZQUIERDA_ATRAS = 60
 TRIM_DERECHA_ADELANTE = 100
 TRIM_DERECHA_ATRAS = 100
 PWM_MIN_IZQUIERDA = 60

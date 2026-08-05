@@ -116,7 +116,7 @@ Se corrige con seis constantes en `src/main.cpp`:
 
 ```cpp
 const int16_t TRIM_IZQUIERDA_ADELANTE = 75;   // recorta el techo del motor rapido
-const int16_t TRIM_IZQUIERDA_ATRAS = 88;
+const int16_t TRIM_IZQUIERDA_ATRAS = 60;
 const int16_t TRIM_DERECHA_ADELANTE = 100;
 const int16_t TRIM_DERECHA_ATRAS = 100;
 const int16_t PWM_MIN_IZQUIERDA = 60;         // piso de torque de cada motor
@@ -131,23 +131,28 @@ avanzando que retrocediendo. Un trim afinado solo con el carro avanzando **sobre
 en reversa** e invierte la deriva: el carro deja de abrirse hacia un lado y empieza a
 abrirse hacia el otro.
 
-### Que rueda es la fuerte, segun hacia donde gira el carro
+### Que rueda es la fuerte
 
-Con `w = (v_derecha - v_izquierda) / ancho_de_via`, y `w` negativo igual a giro horario
-visto desde arriba:
+**Mirar las ruedas, no hacia donde gira el carro.** Enviar `T` con el carro levantado y
+comparar las fases de a pares: **1/4 contra 3/4** para el avance, **2/4 contra 4/4** para
+la reversa. Cada fase gira una sola rueda durante dos segundos, asi que la comparacion es
+directa y no depende del punto de vista.
+
+Deducirlo del sentido de giro del carro parece mas rapido pero es donde se pierde tiempo.
+La relacion existe y es esta, con `w = (v_derecha - v_izquierda) / ancho_de_via` y `w`
+negativo igual a giro horario visto **desde arriba**:
 
 | Sentido de marcha | El carro se abre | Rueda mas fuerte |
 |---|---|---|
-| Adelante | Horario (a la derecha) | Izquierda |
-| Adelante | Antihorario (a la izquierda) | Derecha |
-| Reversa | Horario | **Derecha** |
-| Reversa | Antihorario | **Izquierda** |
+| Adelante | Horario | Izquierda |
+| Adelante | Antihorario | Derecha |
+| Reversa | Horario | Derecha |
+| Reversa | Antihorario | Izquierda |
 
-En reversa la relacion se invierte respecto del avance. Es el error facil de cometer:
-el carro gira igual que cuando avanza con la izquierda fuerte, pero la culpable es la otra.
-
-Para confirmarlo sin depender de la geometria, enviar **`T`** y comparar las fases
-**2/4** (izquierda atras) y **4/4** (derecha atras): giran una por vez y se oye cual corre mas.
+El problema es aplicarla. En reversa la relacion se invierte respecto del avance, y
+encima el carro retrocede hacia el observador, con lo que confundir horario con
+antihorario es facilisimo. Una sola equivocacion al leer el giro manda el ajuste en la
+direccion contraria. La prueba `T` no tiene esa trampa.
 
 ### Ajuste del trim, a velocidad de crucero
 
@@ -170,10 +175,13 @@ Bajar siempre, nunca subir por encima de 100. El trim solo recorta.
 Con el avance ya derecho, hacer lo mismo retrocediendo y tocando solo los `_ATRAS`.
 Los valores de avance quedan fijos: cada sentido se ajusta contra su propia deriva.
 
-Si un extremo sobre-corrige y el otro se queda corto, conviene ir por bisección en vez
-de a tientas. Con `75` girando horario y `100` girando antihorario, el valor bueno esta
-en el medio: se prueba `88`, y segun hacia donde gire se busca entre `75` y `88` o entre
-`88` y `100`. Tres o cuatro pruebas alcanzan.
+No hay razon para que el valor de reversa se parezca al de avance. En este chasis la
+rueda izquierda vence en los dos sentidos, pero en reversa vence mas: su trim de atras
+quedo en `60` contra `75` de adelante.
+
+Conviene bajar de a 10 hasta pasarse, es decir hasta que la deriva cambie de lado. Ese
+momento acota el valor bueno entre las dos ultimas pruebas, y de ahi se bisecta. Tres o
+cuatro iteraciones alcanzan; buscar el valor exacto de entrada es mas lento.
 
 ### Ajuste del piso, a baja velocidad
 
@@ -205,7 +213,7 @@ Todos en `src/main.cpp`, arriba del archivo:
 | Constante | Valor | Que hace |
 |---|---|---|
 | `PWM_MIN_IZQUIERDA` / `_DERECHA` | 60 | Piso de torque de cada motor. Debajo de ese PWM zumba pero no gira. El rango util del joystick se reparte sobre `PWM_MIN..techo`, no sobre `0..255` |
-| `TRIM_*_ADELANTE` / `_ATRAS` | 75 / 88 / 100 | Recorta el techo del motor mas rapido. Cada sentido lleva el suyo porque un motor DC no es simetrico |
+| `TRIM_*_ADELANTE` / `_ATRAS` | 75 / 60 / 100 | Recorta el techo del motor mas rapido. Cada sentido lleva el suyo porque un motor DC no es simetrico |
 | `RAMPA_PASO` | 12 | Cambio maximo de PWM por tick. Limita el `di/dt` del arranque para que el pico de corriente no reinicie el Mega. 0 a 255 en ~210 ms |
 | `TICK_MS` | 10 | Periodo del lazo de rampa. Fija la pendiente real de aceleracion |
 | `FAILSAFE_MS` | 400 | Si el enlace analogico se corta por mas de este tiempo, el carro frena solo |
