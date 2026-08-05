@@ -107,14 +107,18 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
             // Logo del autor, en la franja que queda libre entre la barra superior y la
             // consola. Es la unica zona central donde no hay nada que tocar, asi que se
             // ve de frente sin quedar nunca bajo el pulgar ni tapar un control.
+            //
+            // Es un wordmark ancho y bajo, y esa franja tiene justo esa forma: sobra
+            // ancho entre los dos sticks y falta alto. Se dimensiona por altura y el
+            // ancho lo resuelve la proporcion de la imagen.
             Image(
                 painter = painterResource(R.drawable.ic_brand),
                 contentDescription = null,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = maxHeight * 0.17f)
-                    .height((maxHeight * 0.16f).coerceIn(40.dp, 72.dp))
-                    .alpha(0.65f)
+                    .padding(top = maxHeight * 0.155f)
+                    .height((maxHeight * 0.115f).coerceIn(30.dp, 56.dp))
+                    .alpha(0.8f)
             )
 
             // Los sticks van anclados a las esquinas de abajo y no centrados a media
