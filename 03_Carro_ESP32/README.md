@@ -59,11 +59,59 @@ ECHO ---[ 1k ]---+--- GPIO 21
 
 El TRIG si va directo: es entrada del sensor y reconoce 3.3 V como nivel alto.
 
-### Alimentacion del servo
+## Alimentacion
 
-A la **bateria**, nunca al 3V3 del ESP32. El servo tira picos de unos 500 mA al arrancar
-y esa caida reinicia la placa. Capacitor de 470 uF entre su alimentacion y GND, y todas
-las tierras unidas. **Es el fallo mas comun en este tipo de armado.**
+Tres rieles separados. La separacion no es prolijidad: es lo que evita que el carro se
+reinicie solo.
+
+```
+  Power bank --USB--> ESP32 --5V--> HC-SR04      (15 mA, inofensivo)
+                        |
+                       GND ------+
+                                 |
+  2x 18650 --> L298N --+-- Vin --+--> motores
+   (7.4V)              |
+                       +-- 5V out --> SERVO  + 470 uF
+                       |
+                      GND --------------+   <- todo unido
+```
+
+| Carga | Riel | Por que |
+|---|---|---|
+| ESP32 | Power bank 5V | Limpio y aislado del ruido de los motores |
+| HC-SR04 | 5V del ESP32 | Solo 15 mA, y comparte tierra con el micro, que es lo que necesita para que el pulso de ECHO se mida bien |
+| Servo | 5V del L298N | Picos de 700 mA que no pueden tocar el riel del micro |
+| Motores | L298N desde bateria | Etapa de potencia, ya separada |
+
+### Por que el servo no comparte riel con el ESP32
+
+Un SG90 consume 100 a 250 mA moviendose y 500 a 700 mA en el arranque. Ese pico dura
+milisegundos pero hunde la tension del riel, y el ESP32 se reinicia por debajo de unos
+2.8 V. Como el sonar mueve el servo cincuenta veces por segundo, compartir riel es
+cincuenta oportunidades de reinicio por segundo.
+
+### El capacitor va pegado al servo
+
+470 uF entre alimentacion y GND, **lo mas cerca posible del conector del servo**. Lo que
+causa la caida es la inductancia del cable, asi que el capacitor tiene que estar del lado
+del servo para poder entregar el pico localmente; puesto en la placa no sirve de nada.
+
+### Tierras
+
+Todas unidas en un punto: ESP32, L298N, servo, sensor y bateria. El negativo del servo va
+directo al GND del L298N y **no** al pin GND del ESP32: si su corriente de pico vuelve por
+la tierra del micro, la caida en ese cable corre la referencia del ESP32 y produce
+lecturas erraticas y reinicios.
+
+### Lo que no se debe hacer
+
+| Nunca | Que pasa |
+|---|---|
+| Bateria de 9V para los motores | No entrega la corriente; la tension se desploma al arrancar |
+| 2x 18650 directo al pin VIN | El regulador lineal del DevKit disipa 1.8 W y entra en proteccion termica |
+| 5 V al pin 3V3 | Va directo al chip, sin regulador. Lo quema |
+| Servo al pin 3V3 | No entrega esa corriente y el servo queda sin fuerza |
+| Servo a los 7.4 V de la bateria | Un SG90 se quema por encima de unos 6 V |
 
 ## Como se usa
 
