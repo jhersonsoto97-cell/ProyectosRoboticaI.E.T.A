@@ -1,0 +1,26 @@
+# Valores de arranque del proyecto. Se aplican al generar sdkconfig por primera
+# vez; despues manda sdkconfig, que no entra al repositorio por ser generado.
+
+# El servidor HTTP no trae WebSocket habilitado de fabrica, y sin el no hay
+# canal para el mando ni para la telemetria del sonar.
+CONFIG_HTTPD_WS_SUPPORT=y
+
+# La pagina web va embebida y ronda los 14 KB. El buffer por defecto la parte en
+# demasiados trozos y encarece cada carga.
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=512
+
+# Un tick de 1 ms permite pausas cortas y precisas en el barrido del servo. Con
+# los 100 Hz por defecto, el paso minimo seria de 10 ms y el barrido quedaria
+# mas lento de lo que el servo puede seguir.
+CONFIG_FREERTOS_HZ=1000
+
+# El escaneo arma la respuesta con todos los puntos en una cadena, y esa tarea
+# necesita mas pila que la que trae por defecto.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Solo se usa como punto de acceso. Quitar el modo estacion libera memoria.
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+
+# Salida por el puerto USB del DevKit.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y

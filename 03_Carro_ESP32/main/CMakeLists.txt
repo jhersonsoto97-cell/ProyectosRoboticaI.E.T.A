@@ -1,0 +1,15 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "drive.c"
+        "sonar.c"
+        "web.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        driver
+        esp_wifi
+        esp_http_server
+        nvs_flash
+        esp_timer
+)
