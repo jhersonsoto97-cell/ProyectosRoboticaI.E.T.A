@@ -38,6 +38,19 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Se firma con la misma clave que el release cuando esta disponible.
+            //
+            // Con claves distintas, instalar un debug sobre un release obliga a
+            // desinstalar primero, y con ello se pierden los ajustes guardados de
+            // calibracion. Igualarlas hace que cualquier build reemplace a cualquier
+            // otro sin ceremonia. Si no hay keystore, cae a la clave de depuracion y
+            // el proyecto sigue compilando para quien lo clone sin el .jks.
+            if (hayClaveDeRelease) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+
         release {
             // R8 elimina las clases de Compose que la app no usa. La app no depende de
             // reflexion sobre codigo propio, asi que no hay nada que preservar a mano:

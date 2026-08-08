@@ -49,10 +49,24 @@ Queda en `app/build/outputs/apk/release/app-release.apk`, alrededor de **1 MB** 
 los 8.5 MB del debug. La diferencia la hace R8, que descarta las clases y los recursos
 de Compose que la app no usa.
 
-**El release y el debug se firman con claves distintas**, y Android no deja actualizar
-una instalacion cambiando de clave. Para pasar de una version debug a una release hay
-que **desinstalar primero** en cada telefono. De ahi en adelante las actualizaciones
-release sobre release funcionan normal.
+### Debug y release comparten la clave
+
+Ambas variantes se firman con la misma clave, asi que **cualquiera se instala sobre
+cualquiera** sin desinstalar y sin perder los ajustes guardados de calibracion.
+
+De fabrica, Gradle firma el debug con una clave generica distinta de la del release, y
+Android no permite actualizar una instalacion cambiando de clave. Eso obligaba a
+desinstalar cada vez que se alternaba entre una y otra, con la calibracion perdiendose en
+el camino. Igualarlas elimina el problema de raiz.
+
+Si alguien clona el repositorio **sin el `.jks`**, el debug cae a la clave generica y el
+proyecto compila igual. En ese caso sus APK si chocaran con los firmados con la clave
+del proyecto, y habra que desinstalar para alternar.
+
+### Cual repartir
+
+El de `release`. Pesa 1.1 MB contra 8.5 MB del debug, no lleva la instrumentacion de
+depuracion, y es el que corresponde entregar.
 
 #### La clave de firma
 
