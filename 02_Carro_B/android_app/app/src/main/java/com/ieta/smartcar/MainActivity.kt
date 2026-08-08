@@ -8,11 +8,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.ieta.smartcar.ui.GamepadScreen
+import com.ieta.smartcar.ui.SplashScreen
 import com.ieta.smartcar.ui.theme.SmartCarTheme
 
 class MainActivity : ComponentActivity() {
@@ -36,6 +44,9 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Antes de super.onCreate: la pantalla del sistema tiene que quedar instalada
+        // antes de que la ventana se dibuje por primera vez.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         // Un mando que se apaga a mitad de una maniobra deja el carro sin comandos,
@@ -51,12 +62,28 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SmartCarTheme {
+                var mostrarSplash by remember { mutableStateOf(true) }
+
                 LaunchedEffect(Unit) {
                     if (requiredPermissions.isNotEmpty()) {
                         permissionLauncher.launch(requiredPermissions)
                     }
                 }
-                GamepadScreen(viewModel = controller)
+
+                // Cruce en vez de corte seco: el fondo es el mismo en las dos pantallas,
+                // asi que el desvanecido se lee como que la interfaz aparece encima del
+                // logo y no como un cambio de vista.
+                Crossfade(
+                    targetState = mostrarSplash,
+                    animationSpec = tween(420),
+                    label = "arranque"
+                ) { enSplash ->
+                    if (enSplash) {
+                        SplashScreen(onTerminado = { mostrarSplash = false })
+                    } else {
+                        GamepadScreen(viewModel = controller)
+                    }
+                }
             }
         }
     }

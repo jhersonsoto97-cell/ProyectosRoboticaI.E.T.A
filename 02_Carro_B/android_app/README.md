@@ -216,6 +216,23 @@ A 9600 baudios el enlace mueve ~960 B/s; 20 tramas de ~11 bytes usan ~220 B/s. S
 
 ---
 
+## Pantalla de arranque
+
+Son dos capas con propositos distintos.
+
+La **del sistema** cubre el hueco entre el toque en el icono y el primer fotograma de
+Compose. Sin ella ese instante muestra el fondo de la ventana en blanco, que sobre una
+interfaz oscura se percibe como un destello. Se apoya en `core-splashscreen` para que
+tambien funcione en Android 11 y anteriores, donde la API nativa no existe.
+
+La **de marca** viene despues y dura 1.4 s: tres anillos se expanden desde donde luego
+quedan los sticks, y el wordmark entra en el centro. Los anillos no son decoracion
+arbitraria, anticipan la disposicion de la pantalla de manejo, asi que al terminar el ojo
+ya sabe donde mirar.
+
+**Se puede saltar tocando la pantalla.** Una presentacion que no se puede omitir estorba
+a la decima vez que se abre la app, y durante una demostracion se abre muchas veces.
+
 ## Arquitectura
 
 ```

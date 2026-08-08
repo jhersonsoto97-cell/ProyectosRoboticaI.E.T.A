@@ -6,4 +6,18 @@
         <item name="android:statusBarColor">#FF05070F</item>
         <item name="android:navigationBarColor">#FF05070F</item>
     </style>
+
+    <!--
+      Pantalla de arranque del sistema. Es la que se ve entre el toque en el icono y el
+      primer fotograma de Compose: sin ella ese hueco muestra el fondo de la ventana en
+      blanco, que sobre una interfaz oscura se percibe como un destello.
+
+      No reemplaza a la animacion de marca, que viene despues y es la que se ve. Esta
+      solo cubre el arranque del proceso, donde todavia no hay nada dibujable.
+    -->
+    <style name="Theme.SmartCar.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FF05070F</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.SmartCar</item>
+    </style>
 </resources>
