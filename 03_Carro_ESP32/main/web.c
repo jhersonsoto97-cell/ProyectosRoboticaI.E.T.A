@@ -200,7 +200,13 @@ static void iniciar_ap(void) {
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "red '%s', abrir http://192.168.4.1", WIFI_SSID);
+    /* Debe ir despues de start: antes, la radio todavia no existe. */
+    esp_wifi_set_max_tx_power(WIFI_POTENCIA_TX);
+
+    int8_t potencia = 0;
+    esp_wifi_get_max_tx_power(&potencia);
+    ESP_LOGI(TAG, "red '%s', TX %.1f dBm, abrir http://192.168.4.1",
+             WIFI_SSID, potencia / 4.0f);
 }
 
 void web_iniciar(void) {

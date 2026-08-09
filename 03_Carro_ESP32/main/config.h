@@ -147,6 +147,19 @@
 #define WIFI_CANAL         1
 #define WIFI_MAX_CLIENTES  4
 
+/* Potencia de transmision, en unidades de 0.25 dBm. El rango va de 8 a 84, es
+ * decir de 2 a 20 dBm.
+ *
+ * Por defecto el ESP32 transmite a 20 dBm, pensado para alcanzar decenas de
+ * metros. Quien maneja el carro esta a dos o tres, y cada transmision a plena
+ * potencia son unos 80 mA extra en picos que hunden la alimentacion. Bajarla a
+ * 11 dBm conserva alcance de sobra para un salon y recorta el pico casi a la
+ * mitad, que es la diferencia entre que el carro se reinicie o no cuando la
+ * fuente esta justa.
+ *
+ * Si el enlace se corta al alejarse, subir de a 8 unidades. */
+#define WIFI_POTENCIA_TX   44
+
 /* Cadencia con que se empujan las lecturas al navegador. Mas rapido no aporta:
  * el servo no alcanza a moverse entre trama y trama. */
 #define TELEMETRIA_MS      40
