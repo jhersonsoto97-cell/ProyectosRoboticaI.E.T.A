@@ -6,6 +6,9 @@
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "esp_rom_sys.h"
+#include "esp_log.h"
+
+static const char *TAG_SONAR = "sonar";
 
 /* Cuantos angulos entran en un sector, mas margen. El buffer es estatico:
  * reservarlo y liberarlo en cada escaneo fragmentaria la memoria a lo largo de
@@ -246,6 +249,51 @@ int sonar_ejecutar_escaneo(void) {
     en_escaneo = false;
     barriendo = true;
     return cantidad_puntos;
+}
+
+void sonar_autoprueba(void) {
+    /* La tarea de barrido ya esta corriendo y moveria el servo por su cuenta,
+     * lo que mezclaria sus lecturas con las de la prueba. */
+    barriendo = false;
+    vTaskDelay(pdMS_TO_TICKS(60));
+
+    ESP_LOGI(TAG_SONAR, "Servo y sonar. El brazo debe barrer de lado a lado.");
+
+    int conEco = 0;
+    int total = 0;
+    float minima = ALCANCE_MAX_CM;
+
+    for (int a = ANGULO_MIN; a <= ANGULO_MAX; a += 20) {
+        const float cm = medir_en(a);
+        ++total;
+        if (cm > 0) {
+            ++conEco;
+            if (cm < minima) {
+                minima = cm;
+            }
+            ESP_LOGI(TAG_SONAR, "  %3d grados -> %6.1f cm", a - 90, cm);
+        } else {
+            ESP_LOGI(TAG_SONAR, "  %3d grados -> sin eco", a - 90);
+        }
+    }
+
+    servo_escribir((ANGULO_MIN + ANGULO_MAX) / 2);
+
+    ESP_LOGI(TAG_SONAR, "  %d de %d angulos con eco", conEco, total);
+
+    if (conEco == 0) {
+        ESP_LOGW(TAG_SONAR, "  Ningun eco. Revisar en este orden:");
+        ESP_LOGW(TAG_SONAR, "    1. VCC del sensor a 5 V, no a 3V3");
+        ESP_LOGW(TAG_SONAR, "    2. divisor entre ECHO y GPIO%d", (int)PIN_SONAR_ECHO);
+        ESP_LOGW(TAG_SONAR, "    3. TRIG en GPIO%d y tierra comun", (int)PIN_SONAR_TRIG);
+    } else if (conEco < total / 2) {
+        ESP_LOGW(TAG_SONAR, "  Pocos ecos. Normal apuntando al aire libre;");
+        ESP_LOGW(TAG_SONAR, "  repetir frente a una pared para confirmar.");
+    } else {
+        ESP_LOGI(TAG_SONAR, "  Sonar OK. Mas cercano a %.1f cm", minima);
+    }
+
+    barriendo = true;
 }
 
 const sonar_lectura_t *sonar_puntos_escaneo(void) { return puntos; }

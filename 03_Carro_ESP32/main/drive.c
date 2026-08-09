@@ -5,6 +5,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_timer.h"
+#include "esp_log.h"
+
+static const char *TAG_DRIVE = "drive";
 
 static int16_t objetivo_izq = 0;
 static int16_t objetivo_der = 0;
@@ -170,6 +173,43 @@ void drive_actualizar(void) {
 int16_t drive_aplicada_izquierda(void) { return actual_izq; }
 int16_t drive_aplicada_derecha(void) { return actual_der; }
 bool drive_failsafe_activo(void) { return failsafe_disparado; }
+
+/** Un pulso de un solo motor, informando que pines quedan en alto. */
+static void pulso_motor(const char *nombre, gpio_num_t pin_adelante, gpio_num_t pin_atras,
+                        ledc_channel_t canal, int16_t potencia, bool invertir,
+                        const char *sentido) {
+    const int16_t fisica = invertir ? (int16_t)(-potencia) : potencia;
+    ESP_LOGI(TAG_DRIVE, "  %s %s  ->  GPIO%d=%s  GPIO%d=%s",
+             nombre, sentido,
+             (int)pin_adelante, fisica > 0 ? "ALTO" : "bajo",
+             (int)pin_atras,    fisica > 0 ? "bajo" : "ALTO");
+
+    aplicar_canal(pin_adelante, pin_atras, canal, escalar(potencia, 100), invertir);
+    vTaskDelay(pdMS_TO_TICKS(AUTOPRUEBA_PULSO_MS));
+    aplicar_canal(pin_adelante, pin_atras, canal, 0, invertir);
+    vTaskDelay(pdMS_TO_TICKS(400));
+}
+
+void drive_autoprueba(void) {
+    ESP_LOGI(TAG_DRIVE, "Motores. Levanta el carro para que no se escape.");
+
+    pulso_motor("izquierdo", PIN_IZQ_ADELANTE, PIN_IZQ_ATRAS, CANAL_IZQ,
+                AUTOPRUEBA_PWM, INVERTIR_IZQUIERDA, "adelante");
+    pulso_motor("izquierdo", PIN_IZQ_ADELANTE, PIN_IZQ_ATRAS, CANAL_IZQ,
+                -AUTOPRUEBA_PWM, INVERTIR_IZQUIERDA, "atras   ");
+    pulso_motor("derecho  ", PIN_DER_ADELANTE, PIN_DER_ATRAS, CANAL_DER,
+                AUTOPRUEBA_PWM, INVERTIR_DERECHA, "adelante");
+    pulso_motor("derecho  ", PIN_DER_ADELANTE, PIN_DER_ATRAS, CANAL_DER,
+                -AUTOPRUEBA_PWM, INVERTIR_DERECHA, "atras   ");
+
+    drive_detener();
+
+    ESP_LOGI(TAG_DRIVE, "  Ninguno giro    -> falta bateria en el driver, o los");
+    ESP_LOGI(TAG_DRIVE, "                     jumpers ENA/ENB siguen puestos");
+    ESP_LOGI(TAG_DRIVE, "  Uno solo giro   -> revisar sus tres cables y su canal");
+    ESP_LOGI(TAG_DRIVE, "  Giro al reves   -> cambiar su INVERTIR_* en config.h");
+    ESP_LOGI(TAG_DRIVE, "  Solo un sentido -> el pin que queda ALTO no llega al driver");
+}
 
 void drive_girar_sobre_eje(int16_t pwm, uint32_t duracion_ms) {
     /* Se saltan la rampa y el failsafe a proposito: es una maniobra cerrada, de

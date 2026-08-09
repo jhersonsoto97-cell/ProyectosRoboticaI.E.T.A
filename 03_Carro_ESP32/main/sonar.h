@@ -43,3 +43,12 @@ bool sonar_escaneando(void);
 
 /** Progreso del escaneo en curso, de 0 a 100. */
 int sonar_progreso(void);
+
+/**
+ * Barre el servo e informa las lecturas por consola.
+ *
+ * Separa dos fallas que desde el navegador se ven iguales: un servo que no se
+ * mueve y un sensor que no devuelve eco. Se ejecuta antes de levantar la red,
+ * asi que no necesita celular ni WiFi para diagnosticar.
+ */
+void sonar_autoprueba(void);

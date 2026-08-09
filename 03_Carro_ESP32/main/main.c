@@ -110,6 +110,17 @@ void app_main(void) {
 
     drive_iniciar();
     sonar_iniciar();
+
+    /* Antes de levantar la red: si el hardware falla, conviene saberlo sin tener
+     * que conectar el celular para averiguarlo. */
+#if AUTOPRUEBA_AL_ARRANCAR
+    ESP_LOGI(TAG, "---------- AUTOPRUEBA ----------");
+    sonar_autoprueba();
+    drive_autoprueba();
+    ESP_LOGI(TAG, "---------- FIN ----------");
+    ESP_LOGI(TAG, "Para saltarla, poner AUTOPRUEBA_AL_ARRANCAR en 0 en config.h");
+#endif
+
     web_iniciar();
 
     for (;;) {

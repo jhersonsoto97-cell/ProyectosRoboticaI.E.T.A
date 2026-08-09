@@ -150,3 +150,21 @@
 /* Cadencia con que se empujan las lecturas al navegador. Mas rapido no aporta:
  * el servo no alcanza a moverse entre trama y trama. */
 #define TELEMETRIA_MS      40
+
+/* ------------------------------------------------------------
+ *   Autoprueba de arranque
+ * ------------------------------------------------------------
+ *   Ejercita servo, sonar y cada motor por separado, imprimiendo
+ *   el resultado por el monitor. Sirve para saber en segundos si
+ *   el problema esta en el cableado, en la alimentacion o en el
+ *   codigo, sin depender del celular ni de la red.
+ *
+ *   Poner en 0 para la demostracion: son unos ocho segundos que
+ *   no hacen falta cada vez que se enciende el carro.
+ * ------------------------------------------------------------ */
+#define AUTOPRUEBA_AL_ARRANCAR   1
+
+/* Potencia y duracion de cada pulso de motor durante la autoprueba. Suave y
+ * corto: alcanza para ver girar la rueda sin que el carro se escape de la mesa. */
+#define AUTOPRUEBA_PWM           140
+#define AUTOPRUEBA_PULSO_MS      600

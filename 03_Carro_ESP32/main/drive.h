@@ -38,3 +38,12 @@ bool drive_failsafe_activo(void);
  * o el sector medido no correspondera al angulo supuesto.
  */
 void drive_girar_sobre_eje(int16_t pwm, uint32_t duracion_ms);
+
+/**
+ * Mueve cada motor por separado, en los dos sentidos, informando por consola.
+ *
+ * Se prueba de a uno porque con los dos girando es imposible distinguir un motor
+ * invertido de un giro pedido a proposito, y se prueba cada sentido porque cada
+ * uno usa una mitad distinta del puente H: fallando una sola, la otra igual anda.
+ */
+void drive_autoprueba(void);
