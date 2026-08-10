@@ -61,34 +61,68 @@ El TRIG si va directo: es entrada del sensor y reconoce 3.3 V como nivel alto.
 
 ## Alimentacion
 
-Tres rieles separados. La separacion no es prolijidad: es lo que evita que el carro se
-reinicie solo.
+### La bateria: cuatro celdas en 2S2P
+
+Dos portapilas iguales de dos celdas cada uno, **unidos en paralelo**.
 
 ```
-  Power bank --USB--> ESP32 --5V--> HC-SR04      (15 mA, inofensivo)
-                        |
-                       GND ------+
-                                 |
-  2x 18650 --> L298N --+-- Vin --+--> motores
-   (7.4V)              |
-                       +-- 5V out --> SERVO  + 470 uF
-                       |
-                      GND --------------+   <- todo unido
+  Portapilas A:  [18650]-[18650] --+-- + --> L298N Vin
+                                    |
+  Portapilas B:  [18650]-[18650] --+
+
+                 ambos negativos ------ GND
 ```
 
-| Carga | Riel | Por que |
+| | Un portapilas | Los dos en paralelo |
 |---|---|---|
-| ESP32 | Power bank 5V | Limpio y aislado del ruido de los motores |
-| HC-SR04 | 5V del ESP32 | Solo 15 mA, y comparte tierra con el micro, que es lo que necesita para que el pulso de ECHO se mida bien |
-| Servo | 5V del L298N | Picos de 700 mA que no pueden tocar el riel del micro |
-| Motores | L298N desde bateria | Etapa de potencia, ya separada |
+| Tension | 7.4 V | **7.4 V**, no cambia |
+| Capacidad | ~2500 mAh | **~5000 mAh** |
+| Resistencia interna | ~0.1 ohm | **~0.05 ohm** |
 
-### Por que el servo no comparte riel con el ESP32
+Lo que importa no es solo la autonomia sino la resistencia interna: a la mitad, la
+tension cae la mitad cuando arrancan los motores, y el regulador de 5 V del driver se
+mantiene por encima de su minimo durante mucho mas tiempo de descarga.
 
-Un SG90 consume 100 a 250 mA moviendose y 500 a 700 mA en el arranque. Ese pico dura
-milisegundos pero hunde la tension del riel, y el ESP32 se reinicia por debajo de unos
-2.8 V. Como el sonar mueve el servo cincuenta veces por segundo, compartir riel es
-cincuenta oportunidades de reinicio por segundo.
+**Nunca en serie.** Cuatro celdas en serie dan 16.8 V cargadas: los motores, que son de
+3 a 6 V, reciben cerca de 13 V tras la caida del driver y se queman. El regulador, por su
+parte, tendria que disipar 1.8 W y entraria en proteccion termica.
+
+**Antes de unir los portapilas**, medir cada uno por separado: la diferencia entre ambos
+debe ser menor a 0.1 V. Si uno esta cargado y el otro no, al conectarlos el lleno
+descarga sobre el vacio con varios amperios. Y revisar dos veces la polaridad: positivo
+con positivo. Invertir uno crea un cortocircuito entre packs, y un 18650 entrega veinte
+amperios sin esfuerzo.
+
+### El reparto de rieles
+
+```
+                      +--> 5V out --> ESP32 VIN  + 470 uF
+  4x 18650 --> L298N -+--> 5V out --> HC-SR04
+  (7.4V, 2S2P)        +--> 5V out --> SERVO      + 470 uF
+                      +--> Vin -----> motores
+                      GND ----- todo unido en un punto
+```
+
+| Carga | Consumo | Notas |
+|---|---|---|
+| ESP32 | 150 mA medios, picos de 250 | El regulador disipa 0.36 W, que aguanta tibio |
+| HC-SR04 | 15 mA | Inofensivo |
+| Servo | 150 mA, picos de 700 | Necesita su capacitor propio |
+| Motores | 400 a 800 mA, picos de 2 A | Van a la etapa de potencia, no al regulador |
+
+El regulador del driver es un 78M05 y necesita **al menos 7 V a la entrada**. Con las
+celdas cargadas hay 8.4 V y sobra margen; por debajo de 7 V deja de regular y el ESP32 se
+reinicia. De ahi que convenga **cargar las cuatro celdas al tope antes de una
+demostracion**: a media carga el margen desaparece a mitad de camino.
+
+### Por que cada capacitor
+
+Un SG90 consume 100 a 250 mA moviendose y hasta 700 mA al arrancar. Ese pico dura
+milisegundos pero hunde el riel, y el sonar mueve el servo cincuenta veces por segundo.
+El capacitor entrega ese pico localmente para que la caida no llegue al resto.
+
+El del ESP32 cumple la misma funcion con los picos de transmision de la radio, que se
+reducen ademas bajando la potencia de TX (ver `WIFI_POTENCIA_TX` en `config.h`).
 
 ### El capacitor va pegado al servo
 
