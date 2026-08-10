@@ -104,10 +104,23 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
                     .padding(horizontal = 18.dp, vertical = 10.dp)
             )
 
+            // Escudo de la institucion, en el flanco izquierdo. Se le da mas altura que
+            // al wordmark porque es una figura vertical: igualando alturas se veria la
+            // mitad de grande, y a este tamano el escudo se reconoce por su silueta y
+            // sus colores aunque las leyendas no alcancen a leerse.
+            Image(
+                painter = painterResource(R.drawable.ic_escudo),
+                contentDescription = null,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = maxHeight * 0.17f, start = 18.dp)
+                    .height((maxHeight * 0.17f).coerceIn(46.dp, 78.dp))
+                    .alpha(0.9f)
+            )
+
             // Logo del autor, arrimado a la derecha bajo el engranaje. La banda que
             // queda entre la barra superior y el borde de los sticks esta libre de
-            // controles, asi que no estorba al manejar, y deja el lado izquierdo
-            // disponible para un segundo logo.
+            // controles, asi que ninguno de los dos estorba al manejar.
             //
             // Se dimensiona por altura y el ancho lo resuelve la proporcion de la
             // imagen, de modo que las trazas del wordmark se leen completas.

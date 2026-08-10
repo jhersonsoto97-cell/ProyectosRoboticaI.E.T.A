@@ -35,7 +35,7 @@ import com.ieta.smartcar.ui.theme.Neon
 /**
  * Presentacion de marca al abrir.
  *
- * Dura poco menos de un segundo y medio y se puede saltar tocando la pantalla: una
+ * Dura menos de dos segundos y se puede saltar tocando la pantalla: una
  * presentacion que no se puede omitir se vuelve un estorbo a la decima vez que se abre
  * la app, y durante una demostracion se abre muchas veces.
  *
@@ -71,9 +71,10 @@ fun SplashScreen(onTerminado: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         val p = progreso.value
-        // Se captura aca porque dentro del Column el receptor cambia y maxHeight, que
+        // Se capturan aca porque dentro del Column el receptor cambia y maxHeight, que
         // pertenece al ambito de BoxWithConstraints, deja de estar accesible.
-        val altoLogo = (maxHeight * 0.13f).coerceIn(34.dp, 58.dp)
+        val altoEscudo = (maxHeight * 0.34f).coerceIn(88.dp, 150.dp)
+        val altoLogo = (maxHeight * 0.09f).coerceIn(24.dp, 40.dp)
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             // Los anillos nacen donde van los sticks en la pantalla de manejo.
@@ -108,23 +109,38 @@ fun SplashScreen(onTerminado: () -> Unit) {
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // El logo entra despues de los anillos: primero el movimiento, luego la marca.
-            val entradaLogo = ((p - 0.18f) / 0.35f).coerceIn(0f, 1f)
+            // El escudo entra despues de los anillos: primero el movimiento, luego la
+            // marca. Encabeza la presentacion porque el proyecto es de la institucion;
+            // la autoria va debajo y en segundo plano.
+            val entradaEscudo = ((p - 0.14f) / 0.32f).coerceIn(0f, 1f)
+
+            Image(
+                painter = painterResource(R.drawable.ic_escudo),
+                contentDescription = null,
+                modifier = Modifier
+                    .height(altoEscudo)
+                    .alpha(entradaEscudo)
+                    // Arranca levemente mas grande y se asienta: un logo que crece desde
+                    // cero parece un globo, y desde poco mas del tamano final aterriza.
+                    .scale(1.06f - 0.06f * entradaEscudo)
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            val entradaLogo = ((p - 0.40f) / 0.26f).coerceIn(0f, 1f)
 
             Image(
                 painter = painterResource(R.drawable.ic_brand),
                 contentDescription = null,
                 modifier = Modifier
                     .height(altoLogo)
-                    .alpha(entradaLogo)
-                    // Arranca levemente mas grande y se asienta: un logo que crece desde
-                    // cero parece un globo, y desde poco mas del tamano final aterriza.
+                    .alpha(entradaLogo * 0.85f)
                     .scale(1.06f - 0.06f * entradaLogo)
             )
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
 
-            val entradaTexto = ((p - 0.42f) / 0.30f).coerceIn(0f, 1f)
+            val entradaTexto = ((p - 0.58f) / 0.26f).coerceIn(0f, 1f)
             androidx.compose.material3.Text(
                 text = "SMART CAR",
                 color = Neon.TextMuted,
@@ -137,6 +153,10 @@ fun SplashScreen(onTerminado: () -> Unit) {
     }
 }
 
-/** Corta, porque durante una demostracion la app se abre muchas veces. */
-private const val DURACION_MS = 1400
+/**
+ * Corta, porque durante una demostracion la app se abre muchas veces. Son 300 ms mas
+ * que antes: con tres elementos encadenados, el ultimo entraba justo sobre el corte y
+ * la presentacion terminaba pareciendo un salto.
+ */
+private const val DURACION_MS = 1700
 private const val ANILLOS = 3
