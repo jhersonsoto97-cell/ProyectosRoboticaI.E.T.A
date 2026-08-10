@@ -114,7 +114,7 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(top = maxHeight * 0.17f, start = 18.dp)
-                    .height((maxHeight * 0.175f).coerceIn(48.dp, 80.dp))
+                    .height((maxHeight * 0.21f).coerceIn(58.dp, 96.dp))
                     .alpha(0.9f)
             )
 
