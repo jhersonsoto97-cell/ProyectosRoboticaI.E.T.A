@@ -290,10 +290,10 @@ private fun SocialDialog(onDismiss: () -> Unit) {
         containerColor = Neon.Surface,
         titleContentColor = Neon.TextPrimary,
         textContentColor = Neon.TextMuted,
-        title = { Text("Dennir Cuastumal", fontSize = 16.sp) },
+        title = { Text("Credits", fontSize = 16.sp) },
         text = {
             Column {
-                Text("Desarrollo del mando", fontSize = 11.sp)
+                Text("De un egresado, para ustedes.", fontSize = 12.sp)
 
                 Spacer(Modifier.height(18.dp))
 
