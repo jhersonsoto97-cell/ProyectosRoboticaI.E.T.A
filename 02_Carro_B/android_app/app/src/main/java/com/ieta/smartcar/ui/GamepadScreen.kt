@@ -1,5 +1,8 @@
 package com.ieta.smartcar.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -42,6 +46,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -69,6 +74,7 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
 
     var showDevices by remember { mutableStateOf(false) }
     var showCalibration by remember { mutableStateOf(false) }
+    var showSocial by remember { mutableStateOf(false) }
 
     // La telemetria periodica pisa el eco de la calibracion a los pocos cientos de
     // milisegundos, asi que se retiene aparte. Si no, la confirmacion aparece y
@@ -124,14 +130,27 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
             //
             // Se dimensiona por altura y el ancho lo resuelve la proporcion de la
             // imagen, de modo que las trazas del wordmark se leen completas.
+            //
+            // Baja mas que el escudo para quedar centrado contra el: el escudo ocupa
+            // desde 0.17 hasta 0.38 del alto, o sea que su mitad cae en 0.275, y restarle
+            // media altura del wordmark deja los dos sobre la misma linea. Alineandolos
+            // por el borde de arriba el de la derecha parecia colgado.
+            //
+            // Va a opacidad plena. Es trazo blanco sobre fondo oscuro, y atenuado se leia
+            // como un elemento apagado al lado del escudo, que es a todo color.
+            //
+            // Tocandolo se abren las redes del autor. Es el unico control de la pantalla
+            // sin rotulo, y esta bien asi: nadie lo va a pulsar sin querer mientras maneja
+            // porque queda fuera del alcance de los pulgares.
             Image(
                 painter = painterResource(R.drawable.ic_brand),
-                contentDescription = null,
+                contentDescription = "Redes del autor",
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = maxHeight * 0.17f, end = 18.dp)
-                    .height((maxHeight * 0.10f).coerceIn(26.dp, 44.dp))
-                    .alpha(0.8f)
+                    .padding(top = maxHeight * 0.215f, end = 18.dp)
+                    .height((maxHeight * 0.12f).coerceIn(32.dp, 52.dp))
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { showSocial = true }
             )
 
             // Los sticks van anclados a las esquinas de abajo y no centrados a media
@@ -220,6 +239,10 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
         )
     }
 
+    if (showSocial) {
+        SocialDialog(onDismiss = { showSocial = false })
+    }
+
     if (showCalibration) {
         CalibrationDialog(
             trimLeft = viewModel.reverseTrimLeft,
@@ -236,6 +259,102 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
             onAdjustAuthority = viewModel::adjustSteerAuthority,
             onAdjustTravel = viewModel::adjustStickTravel,
             onDismiss = { showCalibration = false }
+        )
+    }
+}
+
+/**
+ * Redes del autor, detras del logo de la esquina.
+ *
+ * Se llega por el logo y no por un boton propio: la barra ya esta llena de controles que
+ * si se usan manejando, y esto no merece quitarles sitio.
+ */
+@Composable
+private fun SocialDialog(onDismiss: () -> Unit) {
+    val contexto = LocalContext.current
+    var fallo by remember { mutableStateOf<String?>(null) }
+
+    val abrir: (String) -> Unit = { url ->
+        // Un telefono sin navegador lanza ActivityNotFoundException. Es raro, pero que la
+        // app se cierre por tocar un logo seria absurdo.
+        try {
+            contexto.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            onDismiss()
+        } catch (sinAplicacion: Exception) {
+            fallo = "No hay ninguna app que pueda abrir el enlace."
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Neon.Surface,
+        titleContentColor = Neon.TextPrimary,
+        textContentColor = Neon.TextMuted,
+        title = { Text("Dennir Cuastumal", fontSize = 16.sp) },
+        text = {
+            Column {
+                Text("Desarrollo del mando", fontSize = 11.sp)
+
+                Spacer(Modifier.height(18.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    SocialTile("INSTAGRAM", R.drawable.ic_instagram, Color(0xFFE1306C)) {
+                        abrir(URL_INSTAGRAM)
+                    }
+                    SocialTile("GITHUB", R.drawable.ic_github, Neon.TextPrimary) {
+                        abrir(URL_GITHUB)
+                    }
+                }
+
+                fallo?.let { mensaje ->
+                    Spacer(Modifier.height(12.dp))
+                    Text(mensaje, color = Neon.Danger, fontSize = 11.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar", color = Neon.Cyan)
+            }
+        }
+    )
+}
+
+@Composable
+private fun SocialTile(
+    label: String,
+    @DrawableRes icon: Int,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(62.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(listOf(accent.copy(alpha = 0.20f), Neon.Surface))
+                )
+                .border(1.dp, accent.copy(alpha = 0.6f), CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = label,
+                tint = accent,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = label,
+            color = Neon.TextMuted,
+            fontSize = 9.sp,
+            letterSpacing = 1.sp,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -755,6 +874,10 @@ private fun SectionLabel(text: String) {
         modifier = Modifier.padding(bottom = 6.dp)
     )
 }
+
+/* Cuentas del autor. Si alguna cambia, se cambia aqui y en ningun otro lado. */
+private const val URL_INSTAGRAM = "https://www.instagram.com/jeison.cstml_"
+private const val URL_GITHUB = "https://github.com/DENCODE31"
 
 private fun radioLabel(radio: Radio): String? = when (radio) {
     Radio.LE -> "BLE"

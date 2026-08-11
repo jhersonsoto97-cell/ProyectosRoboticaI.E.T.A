@@ -1,0 +1,26 @@
+<!--
+    Glifo de Instagram: marco redondeado, lente y punto del flash. Los circulos se
+    trazan con el par de arcos de media vuelta, que es la unica forma fiable de cerrar
+    un circulo en pathData; un solo arco de 360 grados queda indefinido y no se dibuja.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <path
+        android:pathData="M7.4,2.8 L16.6,2.8 A4.6,4.6 0 0 1 21.2,7.4 L21.2,16.6 A4.6,4.6 0 0 1 16.6,21.2 L7.4,21.2 A4.6,4.6 0 0 1 2.8,16.6 L2.8,7.4 A4.6,4.6 0 0 1 7.4,2.8 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round" />
+
+    <path
+        android:pathData="M12,12 m-4.2,0 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2" />
+
+    <path
+        android:pathData="M17.4,6.6 m-1.35,0 a1.35,1.35 0 1,0 2.7,0 a1.35,1.35 0 1,0 -2.7,0"
+        android:fillColor="#FFFFFF" />
+</vector>
