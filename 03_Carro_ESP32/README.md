@@ -96,24 +96,55 @@ amperios sin esfuerzo.
 ### El reparto de rieles
 
 ```
-                      +--> 5V out --> ESP32 VIN  + 470 uF
-  4x 18650 --> L298N -+--> 5V out --> HC-SR04
-  (7.4V, 2S2P)        +--> 5V out --> SERVO      + 470 uF
-                      +--> Vin -----> motores
-                      GND ----- todo unido en un punto
+                        +--> ESP32 VIN                    + 470 uF
+  4x 18650 (7.4V) ------+
+                        +--> L298N Vin --+--> motores
+                                         |
+                                         +--> 5V out --+--> HC-SR04
+                                                       |
+                                                       +--> SERVO  + 470 uF
+
+  todos los negativos ------------------------------------- GND comun
 ```
 
-| Carga | Consumo | Notas |
-|---|---|---|
-| ESP32 | 150 mA medios, picos de 250 | El regulador disipa 0.36 W, que aguanta tibio |
-| HC-SR04 | 15 mA | Inofensivo |
-| Servo | 150 mA, picos de 700 | Necesita su capacitor propio |
-| Motores | 400 a 800 mA, picos de 2 A | Van a la etapa de potencia, no al regulador |
+### Por que el ESP32 cuelga de la bateria y no del riel de 5 V
 
-El regulador del driver es un 78M05 y necesita **al menos 7 V a la entrada**. Con las
-celdas cargadas hay 8.4 V y sobra margen; por debajo de 7 V deja de regular y el ESP32 se
-reinicia. De ahi que convenga **cargar las cuatro celdas al tope antes de una
-demostracion**: a media carga el margen desaparece a mitad de camino.
+Este reparto no fue la primera idea. El plan original colgaba el ESP32 del riel de 5 V del
+driver, y **la medicion lo descarto**: ese pin da 4.74 V sin carga y **cae a 2.31 V** al
+conectar el ESP32, que ni siquiera llega a arrancar.
+
+Un 78M05 sano con 8.1 V a la entrada da 5.00 V clavados. Que ya salga bajo *sin carga*
+dice que el problema no es la corriente sino el pin. La causa mas comun es el **jumper de
+5V-EN** del L298N, que decide si ese terminal es salida del regulador o entrada de 5 V
+externos: quitado, el terminal queda flotando, mide algo por fugas y se hunde con
+cualquier carga.
+
+**Antes de dar por muerto el riel, revisar ese jumper y volver a medir.** Si con el jumper
+puesto aparecen 5.0 V, el riel sirve para el servo y el sensor. Si sigue en 4.74 V, el
+regulador esta danado y hace falta un modulo buck (LM2596) para alimentarlos.
+
+El ESP32 va a la bateria en cualquiera de los dos casos: alimentarlo desde el mismo riel
+del que cuelga el servo significa que cada pico del servo puede reiniciar el micro.
+
+| Carga | Consumo | De donde cuelga |
+|---|---|---|
+| ESP32 | 150 mA medios, picos de 250 | Bateria, por el pin VIN |
+| HC-SR04 | 15 mA | Riel de 5 V |
+| Servo | 150 mA, picos de 700 | Riel de 5 V, con capacitor propio |
+| Motores | 400 a 800 mA, picos de 2 A | Etapa de potencia del driver |
+
+**Lo que disipa el regulador del DevKit.** El AMS1117 de la placa baja de 8.1 V a 3.3 V
+con 150 mA medios, o sea `(8.1 - 3.3) x 0.15 = 0.72 W`. Queda caliente al tacto pero
+dentro de especificacion, y el integrado trae proteccion termica: si se pasa, se apaga
+solo antes de romperse.
+
+Con el pico de 250 mA la cuenta da 1.2 W, pero **ese numero no sirve para dimensionar**:
+son milisegundos de transmision de radio, no regimen permanente. Lo que calienta el
+encapsulado es la media.
+
+**Verificar en el primer arranque**: tocar el regulador a los diez minutos. Tibio esta
+bien; si quema al punto de no poder dejar el dedo, hay que bajar la tension de entrada con
+un buck antes del pin VIN.
 
 ### Por que cada capacitor
 
@@ -142,10 +173,12 @@ lecturas erraticas y reinicios.
 | Nunca | Que pasa |
 |---|---|
 | Bateria de 9V para los motores | No entrega la corriente; la tension se desploma al arrancar |
-| 2x 18650 directo al pin VIN | El regulador lineal del DevKit disipa 1.8 W y entra en proteccion termica |
+| Mas de 12 V al pin VIN | El regulador del DevKit no lo tolera. Hasta 12 V esta en hoja de datos, y 8.1 V sobra |
 | 5 V al pin 3V3 | Va directo al chip, sin regulador. Lo quema |
 | Servo al pin 3V3 | No entrega esa corriente y el servo queda sin fuerza |
+| Servo al pin 5V del DevKit | Ese pin no esta regulado: es el VIN pasado de largo, o sea los 8.1 V de la bateria |
 | Servo a los 7.4 V de la bateria | Un SG90 se quema por encima de unos 6 V |
+| Cuatro celdas en serie | 16.8 V cargadas. Quema los motores y el regulador entra en proteccion |
 
 ## Como se usa
 
