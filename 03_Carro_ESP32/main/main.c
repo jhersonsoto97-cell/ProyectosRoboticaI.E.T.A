@@ -33,6 +33,7 @@
 #include "nvs_flash.h"
 
 #include "config.h"
+#include "diag.h"
 #include "drive.h"
 #include "sonar.h"
 #include "web.h"
@@ -97,7 +98,30 @@ static void atender_escaneo(void) {
     free(carga);
 }
 
+/**
+ * Corre la prueba que se haya pedido desde la pantalla de diagnostico.
+ *
+ * Igual que el escaneo, se ejecuta aqui y no en el manejador HTTP: una prueba de
+ * motor bloquea mas de un segundo y una de sonar varios, y bloquear la tarea del
+ * servidor dejaria la pantalla congelada durante justo lo que se quiere mirar.
+ */
+static void atender_prueba(void) {
+    const diag_prueba_t pedida = diag_tomar_prueba();
+    if (pedida == PRUEBA_NINGUNA) {
+        return;
+    }
+
+    /* Nada de dejar el carro rodando mientras se prueba otra cosa. */
+    drive_detener();
+    diag_ejecutar(pedida);
+}
+
 void app_main(void) {
+    /* Antes que nada, para que la autoprueba que sigue quede guardada y se pueda
+     * leer despues desde el celular. Lo que se imprima arriba de esta linea sale
+     * por el cable pero se pierde. */
+    diag_iniciar();
+
     ESP_LOGI(TAG, "== Smart Car 03 ==");
 
     /* El WiFi guarda su calibracion en NVS y no arranca sin ella. */
@@ -122,11 +146,13 @@ void app_main(void) {
 #endif
 
     web_iniciar();
+    ESP_LOGI(TAG, "Diagnostico sin cable en http://192.168.4.1/diag");
 
     for (;;) {
         drive_actualizar();
         enviar_telemetria();
         atender_escaneo();
+        atender_prueba();
 
         /* 2 ms mantienen el lazo suelto sin acaparar la CPU: la rampa corre
          * cada 10 ms y la telemetria cada 40, asi que no hace falta mas fino. */

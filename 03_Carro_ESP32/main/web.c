@@ -1,8 +1,10 @@
 #include "web.h"
 #include "config.h"
+#include "diag.h"
 #include "drive.h"
 #include "sonar.h"
 #include "web_page.h"
+#include "diag_page.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -104,6 +106,67 @@ static void manejar_mensaje(const char *texto) {
 static esp_err_t manejar_raiz(httpd_req_t *req) {
     httpd_resp_set_type(req, "text/html");
     return httpd_resp_send(req, PAGINA_HTML, HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t manejar_diag(httpd_req_t *req) {
+    httpd_resp_set_type(req, "text/html");
+    return httpd_resp_send(req, PAGINA_DIAG, HTTPD_RESP_USE_STRLEN);
+}
+
+/**
+ * Vuelca el log capturado como texto plano.
+ *
+ * Texto y no JSON porque el log trae comillas, barras y saltos de linea que
+ * habria que escapar uno por uno; en texto plano el navegador lo recibe tal
+ * cual y no hay forma de que una linea de log rompa el formato.
+ */
+static esp_err_t manejar_log(httpd_req_t *req) {
+    /* Del monton: no cabe en la pila de la tarea del servidor. */
+    char *buffer = malloc(DIAG_LOG_MAXIMO);
+    if (buffer == NULL) {
+        return httpd_resp_send_500(req);
+    }
+
+    const size_t n = diag_log_copiar(buffer, DIAG_LOG_MAXIMO);
+
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    const esp_err_t err = httpd_resp_send(req, buffer, n);
+
+    free(buffer);
+    return err;
+}
+
+static esp_err_t manejar_estado(httpd_req_t *req) {
+    char json[320];
+    const size_t n = diag_estado_json(json, sizeof(json));
+
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_send(req, json, n);
+}
+
+/**
+ * Encola una prueba y responde enseguida.
+ *
+ * No se ejecuta aqui: una prueba de motor bloquea mas de un segundo y una de
+ * sonar varios, y este manejador corre en la tarea del servidor. Bloquearla
+ * dejaria la pantalla congelada durante justo la prueba que se quiere mirar.
+ */
+static esp_err_t manejar_probar(httpd_req_t *req) {
+    char consulta[48];
+    char valor[16];
+
+    if (httpd_req_get_url_query_str(req, consulta, sizeof(consulta)) == ESP_OK &&
+        httpd_query_key_value(consulta, "q", valor, sizeof(valor)) == ESP_OK) {
+        const diag_prueba_t pedida = diag_prueba_por_nombre(valor);
+        if (pedida != PRUEBA_NINGUNA) {
+            diag_pedir_prueba(pedida);
+            ESP_LOGI(TAG, "prueba pedida desde el navegador: %s", valor);
+            return httpd_resp_sendstr(req, "ok");
+        }
+    }
+
+    httpd_resp_set_status(req, "400 Bad Request");
+    return httpd_resp_sendstr(req, "prueba desconocida");
 }
 
 static esp_err_t manejar_ws(httpd_req_t *req) {
@@ -239,5 +302,15 @@ void web_iniciar(void) {
     };
     httpd_register_uri_handler(servidor, &ws);
 
-    ESP_LOGI(TAG, "servidor arriba");
+    const httpd_uri_t rutas_diag[] = {
+        { .uri = "/diag",   .method = HTTP_GET, .handler = manejar_diag },
+        { .uri = "/log",    .method = HTTP_GET, .handler = manejar_log },
+        { .uri = "/estado", .method = HTTP_GET, .handler = manejar_estado },
+        { .uri = "/probar", .method = HTTP_GET, .handler = manejar_probar },
+    };
+    for (size_t i = 0; i < sizeof(rutas_diag) / sizeof(rutas_diag[0]); ++i) {
+        httpd_register_uri_handler(servidor, &rutas_diag[i]);
+    }
+
+    ESP_LOGI(TAG, "servidor arriba. Mando en /, diagnostico en /diag");
 }

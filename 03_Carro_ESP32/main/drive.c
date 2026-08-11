@@ -190,19 +190,28 @@ static void pulso_motor(const char *nombre, gpio_num_t pin_adelante, gpio_num_t 
     vTaskDelay(pdMS_TO_TICKS(400));
 }
 
-void drive_autoprueba(void) {
-    ESP_LOGI(TAG_DRIVE, "Motores. Levanta el carro para que no se escape.");
+void drive_probar_motor(bool izquierdo) {
+    ESP_LOGI(TAG_DRIVE, "Motor %s. Levanta el carro para que no se escape.",
+             izquierdo ? "izquierdo" : "derecho");
 
-    pulso_motor("izquierdo", PIN_IZQ_ADELANTE, PIN_IZQ_ATRAS, CANAL_IZQ,
-                AUTOPRUEBA_PWM, INVERTIR_IZQUIERDA, "adelante");
-    pulso_motor("izquierdo", PIN_IZQ_ADELANTE, PIN_IZQ_ATRAS, CANAL_IZQ,
-                -AUTOPRUEBA_PWM, INVERTIR_IZQUIERDA, "atras   ");
-    pulso_motor("derecho  ", PIN_DER_ADELANTE, PIN_DER_ATRAS, CANAL_DER,
-                AUTOPRUEBA_PWM, INVERTIR_DERECHA, "adelante");
-    pulso_motor("derecho  ", PIN_DER_ADELANTE, PIN_DER_ATRAS, CANAL_DER,
-                -AUTOPRUEBA_PWM, INVERTIR_DERECHA, "atras   ");
+    if (izquierdo) {
+        pulso_motor("izquierdo", PIN_IZQ_ADELANTE, PIN_IZQ_ATRAS, CANAL_IZQ,
+                    AUTOPRUEBA_PWM, INVERTIR_IZQUIERDA, "adelante");
+        pulso_motor("izquierdo", PIN_IZQ_ADELANTE, PIN_IZQ_ATRAS, CANAL_IZQ,
+                    -AUTOPRUEBA_PWM, INVERTIR_IZQUIERDA, "atras   ");
+    } else {
+        pulso_motor("derecho  ", PIN_DER_ADELANTE, PIN_DER_ATRAS, CANAL_DER,
+                    AUTOPRUEBA_PWM, INVERTIR_DERECHA, "adelante");
+        pulso_motor("derecho  ", PIN_DER_ADELANTE, PIN_DER_ATRAS, CANAL_DER,
+                    -AUTOPRUEBA_PWM, INVERTIR_DERECHA, "atras   ");
+    }
 
     drive_detener();
+}
+
+void drive_autoprueba(void) {
+    drive_probar_motor(true);
+    drive_probar_motor(false);
 
     ESP_LOGI(TAG_DRIVE, "  Ninguno giro    -> falta bateria en el driver, o los");
     ESP_LOGI(TAG_DRIVE, "                     jumpers ENA/ENB siguen puestos");

@@ -27,6 +27,15 @@ void sonar_iniciar(void);
 bool sonar_tomar_nueva(sonar_lectura_t *destino);
 
 /**
+ * Igual que la anterior pero sin consumir la marca de "nueva".
+ *
+ * La usa el diagnostico, que consulta aparte: si consumiera la marca le robaria
+ * las lecturas a la telemetria del mando y el radar de la pantalla principal se
+ * quedaria a medias.
+ */
+void sonar_ultima(sonar_lectura_t *destino);
+
+/**
  * Escaneo estacionado. El carro gira sobre su eje entre sectores y el
  * resultado cubre el entorno desde un punto fijo, sin error de odometria
  * porque no hubo desplazamiento.
@@ -52,3 +61,11 @@ int sonar_progreso(void);
  * asi que no necesita celular ni WiFi para diagnosticar.
  */
 void sonar_autoprueba(void);
+
+/**
+ * Mueve el servo a los topes y al centro, sin medir.
+ *
+ * Separada de la anterior porque un servo mudo y un sensor mudo se ven igual en
+ * la prueba conjunta: si nada responde, esta dice cual de los dos falla.
+ */
+void sonar_probar_servo(void);

@@ -198,6 +198,38 @@ bool sonar_tomar_nueva(sonar_lectura_t *destino) {
     return resultado;
 }
 
+void sonar_ultima(sonar_lectura_t *destino) {
+    portENTER_CRITICAL(&mux);
+    *destino = ultima;
+    portEXIT_CRITICAL(&mux);
+}
+
+void sonar_probar_servo(void) {
+    barriendo = false;
+    vTaskDelay(pdMS_TO_TICKS(60));
+
+    ESP_LOGI(TAG_SONAR, "Servo solo. El brazo debe ir a un tope, al otro y al centro.");
+
+    const int centro = (ANGULO_MIN + ANGULO_MAX) / 2;
+    const int posiciones[] = { ANGULO_MIN, ANGULO_MAX, centro };
+
+    for (int i = 0; i < 3; ++i) {
+        ESP_LOGI(TAG_SONAR, "  a %d grados", posiciones[i] - 90);
+        servo_escribir(posiciones[i]);
+        /* Medio segundo por posicion: el recorrido completo de un SG90 tarda
+         * unos 400 ms y hay que poder verlo llegar, no solo salir. */
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+
+    ESP_LOGI(TAG_SONAR, "  No se movio     -> revisar senal en GPIO%d y los 5 V del servo",
+             (int)PIN_SERVO);
+    ESP_LOGI(TAG_SONAR, "  Tiembla o zumba -> le falta corriente: capacitor de 470 uF");
+    ESP_LOGI(TAG_SONAR, "                     pegado al conector del servo");
+    ESP_LOGI(TAG_SONAR, "  Fuerza el tope  -> ajustar ANGULO_MIN y ANGULO_MAX en config.h");
+
+    barriendo = true;
+}
+
 int sonar_ejecutar_escaneo(void) {
     if (en_escaneo) {
         return 0;

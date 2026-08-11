@@ -47,3 +47,12 @@ void drive_girar_sobre_eje(int16_t pwm, uint32_t duracion_ms);
  * uno usa una mitad distinta del puente H: fallando una sola, la otra igual anda.
  */
 void drive_autoprueba(void);
+
+/**
+ * Pulsa un solo motor en los dos sentidos.
+ *
+ * Es la unidad que sirve para reparar: se mueve un cable, se repite esta prueba
+ * desde el celular y se ve al instante si era ese. Probar los dos juntos obliga
+ * a esperar el ciclo completo por cada intento.
+ */
+void drive_probar_motor(bool izquierdo);

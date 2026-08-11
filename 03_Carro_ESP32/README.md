@@ -180,6 +180,49 @@ lecturas erraticas y reinicios.
 | Servo a los 7.4 V de la bateria | Un SG90 se quema por encima de unos 6 V |
 | Cuatro celdas en serie | 16.8 V cargadas. Quema los motores y el regulador entra en proteccion |
 
+## Diagnostico sin cable
+
+`http://192.168.4.1/diag`, desde el mismo celular y sin instalar nada.
+
+Es el monitor serie, servido por WiFi. El firmware engancha el log del sistema y copia
+cada linea a un buffer de 8 KB **ademas** de sacarla por el UART, asi que el cable sigue
+funcionando igual cuando lo hay. El enganche se instala antes que ninguna otra cosa, de
+modo que la autoprueba de arranque queda guardada y se puede leer despues, aunque haya
+corrido varios segundos antes de que el WiFi existiera.
+
+Sin esto, el bring-up obliga a tener el carro sobre la mesa y atado al PC, que es justo la
+postura en la que no se puede probar nada: las ruedas no tocan el piso y la bateria no
+esta alimentando.
+
+### Que muestra
+
+| Dato | Para que sirve |
+|---|---|
+| **Razon del ultimo reinicio** | `BROWNOUT` es fuente, `PANIC` es codigo. Sin este dato los dos se ven igual desde afuera: un carro que se reinicia solo |
+| Memoria libre y minimo historico | Delata una fuga en una demostracion larga |
+| Encendido hace | Si vuelve a cero, hubo un reinicio que quiza no se noto |
+| Potencia por rueda y failsafe | Lo que el firmware esta mandando de verdad al driver |
+| Ultima lectura del sonar | Angulo y distancia, sin tocar el carro |
+| Consola | Todo el log, con scroll y con seguimiento automatico |
+
+### Repetir una prueba
+
+Cinco botones: servo, sonar, motor izquierdo, motor derecho, y todo junto. Se mueve un
+cable, se toca el boton y el resultado aparece en la consola en unos segundos.
+
+Las pruebas no corren dentro del manejador HTTP sino en el lazo principal. Una prueba de
+motor bloquea mas de un segundo y una de sonar varios; ejecutarlas en la tarea del
+servidor dejaria la pantalla congelada durante justo lo que se quiere mirar.
+
+**Las pruebas de motor mueven las ruedas.** Levantar el carro antes de tocarlas.
+
+### Por que sondeo y no WebSocket
+
+La pantalla pregunta cada segundo en vez de mantener un socket abierto. Un socket se cae
+cuando el carro se reinicia, que es precisamente el momento que interesa observar; el
+sondeo se recupera solo en el siguiente intento y muestra el reinicio, en lugar de
+quedarse mudo esperando una reconexion.
+
 ## Como se usa
 
 1. Encender el carro

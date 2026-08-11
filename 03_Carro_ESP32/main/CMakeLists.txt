@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "main.c"
+        "diag.c"
         "drive.c"
         "sonar.c"
         "web.c"
