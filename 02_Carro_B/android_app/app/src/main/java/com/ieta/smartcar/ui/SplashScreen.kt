@@ -154,9 +154,12 @@ fun SplashScreen(onTerminado: () -> Unit) {
 }
 
 /**
- * Corta, porque durante una demostracion la app se abre muchas veces. Son 300 ms mas
- * que antes: con tres elementos encadenados, el ultimo entraba justo sobre el corte y
- * la presentacion terminaba pareciendo un salto.
+ * Con el fundido que viene despues son poco mas de dos segundos y medio en pantalla.
+ * Ese es el techo: durante una demostracion la app se abre muchas veces, y por eso
+ * ademas se puede saltar tocando.
+ *
+ * Las entradas de cada elemento estan expresadas en fracciones de este valor, asi que
+ * moverlo estira o encoge la secuencia completa sin desarmar el ritmo entre una y otra.
  */
-private const val DURACION_MS = 1700
+private const val DURACION_MS = 2200
 private const val ANILLOS = 3
