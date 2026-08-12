@@ -24,3 +24,14 @@ CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
 
 # Salida por el puerto USB del DevKit.
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+
+# Potencia maxima de la radio, en dBm, desde el arranque del PHY.
+#
+# No alcanza con bajarla por codigo: esp_wifi_set_max_tx_power() corre despues de
+# que el PHY ya se inicializo, y es justo esa inicializacion la que pega el pico
+# de corriente. Con el valor de fabrica, 20 dBm, la placa se reinicia en mitad de
+# la calibracion de radio cuando la fuente esta justa.
+#
+# 11 dBm es un cuarto de la potencia y sigue cubriendo un salon entero, que es
+# todo el alcance que este carro necesita.
+CONFIG_ESP_PHY_MAX_WIFI_TX_POWER=11

@@ -168,11 +168,17 @@ void sonar_iniciar(void) {
     };
     gpio_config(&trig);
 
+    /* El pull-down interno es para cuando el ECHO no esta conectado: sin el, el
+     * pin queda flotando, capta ruido y el sonar informa distancias inventadas
+     * que parecen medidas reales. Con el, informa "sin eco", que es la verdad.
+     *
+     * Con el divisor puesto no molesta: son unos 45 kohm en paralelo con los 2 k
+     * de abajo, que bajan la tension de 3.33 a 3.28 V. */
     const gpio_config_t echo = {
         .pin_bit_mask = (1ULL << PIN_SONAR_ECHO),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
     gpio_config(&echo);
