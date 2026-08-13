@@ -4,6 +4,7 @@ import android.app.Application
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -24,6 +25,7 @@ import com.ieta.smartcar.link.RedWifi
 import com.ieta.smartcar.link.SppClient
 import com.ieta.smartcar.link.TcpClient
 import com.ieta.smartcar.link.WebSocketClient
+import com.ieta.smartcar.protocolo.EventoCarro
 import com.ieta.smartcar.protocolo.OrdenCarro
 import com.ieta.smartcar.protocolo.Protocolo
 import kotlinx.coroutines.Job
@@ -86,6 +88,16 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         get() = prefs.getString(KEY_ULTIMO_CARRO, null)?.let { Garaje.porNombre(it) }
 
     private var connectJob: Job? = null
+    private var telemetriaJob: Job? = null
+
+    /** Ultima distancia medida en cada direccion, en centimetros. */
+    val ecos = mutableStateMapOf<Int, Float>()
+
+    /** Hacia donde apunta el sonar ahora mismo, o null si no hay lecturas. */
+    var anguloSonar by mutableStateOf<Int?>(null); private set
+
+    /** Avance del escaneo en curso, de 0 a 100. En 100 el plano ya llego. */
+    var progresoEscaneo by mutableStateOf(100); private set
 
     var leftStickX by mutableStateOf(0f); private set
     var leftStickY by mutableStateOf(0f); private set
@@ -285,6 +297,56 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     private fun switchTo(target: CarLink) {
         if (link !== target) link.disconnect()
         link = target
+
+        // Cada enlace trae su propio flujo de telemetria, asi que la escucha se rearma
+        // al cambiar de transporte. Sin esto seguiriamos leyendo el flujo del anterior,
+        // que ya no recibe nada.
+        telemetriaJob?.cancel()
+        ecos.clear()
+        anguloSonar = null
+        telemetriaJob = viewModelScope.launch {
+            target.telemetry.collect { leerTelemetria(it) }
+        }
+    }
+
+    /**
+     * Traduce lo que llega y guarda lo que la interfaz necesita.
+     *
+     * Los ecos se guardan por angulo y no en una lista: el servo barre de ida y de
+     * vuelta, asi que un mismo angulo se vuelve a medir cada pocos segundos y lo que
+     * interesa es la ultima lectura de cada direccion, no el historial completo.
+     */
+    private fun leerTelemetria(entrante: String) {
+        for (evento in protocolo.decodificar(entrante)) {
+            when (evento) {
+                is EventoCarro.Lectura -> {
+                    anguloSonar = evento.punto.angulo
+                    if (evento.punto.distanciaCm > 0f) {
+                        ecos[evento.punto.angulo] = evento.punto.distanciaCm
+                    } else {
+                        // Sin eco tambien es informacion: ahi no hay nada, y dejar el
+                        // punto viejo dibujado inventaria un obstaculo que ya no esta.
+                        ecos.remove(evento.punto.angulo)
+                    }
+                }
+
+                is EventoCarro.Plano -> {
+                    ecos.clear()
+                    for (punto in evento.puntos) {
+                        if (punto.distanciaCm > 0f) ecos[punto.angulo] = punto.distanciaCm
+                    }
+                }
+
+                is EventoCarro.Progreso -> progresoEscaneo = evento.porcentaje
+                is EventoCarro.Texto -> Unit
+            }
+        }
+    }
+
+    /** Pide al carro que levante el plano del entorno. */
+    fun escanear() {
+        protocolo.codificar(OrdenCarro.Escanear)?.let { link.send(it) }
+        progresoEscaneo = 0
     }
 
     private fun transmit() {

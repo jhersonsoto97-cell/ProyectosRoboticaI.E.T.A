@@ -197,11 +197,39 @@ fun GamepadScreen(
                     .padding(end = 10.dp, bottom = 6.dp)
             )
 
-            CenterConsole(
-                porWifi = viewModel.carro.red != null,
+            // Un carro con sonar usa el centro para el radar y baja el enlace a la fila
+            // de botones. Mirar el radar mientras se maneja es lo que le da sentido: un
+            // obstaculo a la derecha solo sirve si se ve antes de doblar.
+            if (viewModel.carro.capacidades.radar) {
+                RadarPanel(
+                    ecos = viewModel.ecos,
+                    anguloActual = viewModel.anguloSonar,
+                    conectado = linkState == LinkState.CONNECTED,
+                    progresoEscaneo = viewModel.progresoEscaneo,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            } else {
+                CenterConsole(
+                    porWifi = viewModel.carro.red != null,
+                    linkState = linkState,
+                    telemetry = telemetry,
+                    error = lastError,
+                    onToggleConnection = {
+                        if (linkState == LinkState.CONNECTED) {
+                            viewModel.disconnect()
+                        } else {
+                            showDevices = true
+                        }
+                    },
+                    // Centrada en el pasillo que queda entre los dos sticks. Anclarla
+                    // arriba dejaba un hueco muerto en el medio de la pantalla.
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+
+            BottomBar(
+                carro = viewModel.carro,
                 linkState = linkState,
-                telemetry = telemetry,
-                error = lastError,
                 onToggleConnection = {
                     if (linkState == LinkState.CONNECTED) {
                         viewModel.disconnect()
@@ -209,12 +237,7 @@ fun GamepadScreen(
                         showDevices = true
                     }
                 },
-                // Centrada en el pasillo que queda entre los dos sticks. Anclarla arriba
-                // dejaba un hueco muerto en el medio de la pantalla.
-                modifier = Modifier.align(Alignment.Center)
-            )
-
-            BottomBar(
+                onEscanear = viewModel::escanear,
                 mode = viewModel.mode,
                 speedCapLabel = viewModel.speedCapLabel,
                 emergencyStop = viewModel.emergencyStop,
@@ -670,6 +693,10 @@ private fun CenterConsole(
 
 @Composable
 private fun BottomBar(
+    carro: Carro,
+    linkState: LinkState,
+    onToggleConnection: () -> Unit,
+    onEscanear: () -> Unit,
     mode: DriveMode,
     speedCapLabel: String,
     emergencyStop: Boolean,
@@ -683,6 +710,29 @@ private fun BottomBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
+        // El enlace baja aqui solo cuando el centro esta ocupado por el radar. Con el
+        // centro libre se queda arriba, que es donde ya estaba y donde es mas visible
+        // para quien todavia no conecto.
+        if (carro.capacidades.radar) {
+            BotonEnlace(
+                porWifi = carro.red != null,
+                linkState = linkState,
+                onClick = onToggleConnection
+            )
+
+            Spacer(Modifier.width(22.dp))
+
+            NeonRoundButton(
+                caption = "MAPA",
+                value = "SCAN",
+                active = false,
+                accent = Neon.Ok,
+                onClick = onEscanear
+            )
+
+            Spacer(Modifier.width(22.dp))
+        }
+
         NeonRoundButton(
             caption = "MODO",
             value = if (mode == DriveMode.ARCADE) "ARC" else "TANK",
@@ -710,6 +760,54 @@ private fun BottomBar(
             accent = Neon.Danger,
             diameter = 70.dp,
             onClick = onEmergencyStop
+        )
+    }
+}
+
+/**
+ * Boton de enlace con la forma del resto de la fila.
+ *
+ * Lleva el glifo del medio en vez de un rotulo: al lado de MODO, LIMITE y PARO, otra
+ * palabra mas se pierde entre las demas, y el simbolo se reconoce sin leer.
+ */
+@Composable
+private fun BotonEnlace(
+    porWifi: Boolean,
+    linkState: LinkState,
+    onClick: () -> Unit,
+) {
+    val acento = statusColor(linkState)
+    val conectado = linkState == LinkState.CONNECTED
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(62.dp)
+                .clip(CircleShape)
+                .background(if (conectado) acento.copy(alpha = 0.14f) else Neon.Surface)
+                .border(1.5.dp, if (conectado) acento else Neon.Outline, CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            if (porWifi) {
+                WifiGlyph(tint = acento, glyphSize = 26.dp)
+            } else {
+                BluetoothGlyph(tint = acento, glyphSize = 26.dp)
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            text = when (linkState) {
+                LinkState.CONNECTED -> "ENLACE"
+                LinkState.CONNECTING -> "..."
+                LinkState.ERROR -> "FALLO"
+                LinkState.DISCONNECTED -> "VINCULAR"
+            },
+            color = Neon.TextMuted,
+            fontSize = 9.sp,
+            letterSpacing = 1.sp
         )
     }
 }
