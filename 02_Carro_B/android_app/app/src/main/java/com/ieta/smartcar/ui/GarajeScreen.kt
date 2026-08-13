@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -70,16 +71,13 @@ fun GarajeScreen(
             val altoTarjeta = (maxHeight * 0.70f).coerceIn(190.dp, 340.dp)
             val anchoTarjeta = altoTarjeta * 0.78f
 
-            // Un solo tamano para las dos tarjetas, calculado con el nombre mas largo.
+            // Un solo tamano de nombre para las dos tarjetas, calculado con el mas largo.
             // Midiendo cada una por separado, "Carro B" quedaba enorme al lado de
             // "Explorador" y el par se leia como dos disenos distintos.
             //
             // El 0.66 es lo que ocupa de ancho una mayuscula de este peso por cada punto
             // de tamano. Medido sobre el render y no calculado: la primera estimacion
             // fue 0.56 y a "Explorador" le quedaba la ultima letra afuera.
-            //
-            // Va con margen a proposito. Que el nombre roce el borde se lee como que la
-            // tarjeta le queda chica, no como una decision.
             val letrasDelMasLargo = Garaje.todos.maxOf { it.nombre.length }
             val tamanoNombre =
                 ((anchoTarjeta.value - 26f) / (letrasDelMasLargo * 0.66f)).coerceIn(16f, 44f)
@@ -120,7 +118,7 @@ fun GarajeScreen(
                 Spacer(Modifier.height(14.dp))
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(22.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     for (carro in Garaje.todos) {
@@ -139,6 +137,9 @@ fun GarajeScreen(
     }
 }
 
+/** Curvatura de las esquinas. Compartida por la sombra, el recorte y el borde. */
+private val FORMA = RoundedCornerShape(26.dp)
+
 /**
  * La tarjeta de un carro.
  *
@@ -146,9 +147,10 @@ fun GarajeScreen(
  * con el resto y hay que buscarlo, y desbordando se lee de reojo desde el otro
  * lado de la mesa, que es como se usa esta pantalla.
  *
- * Los arcos punteados del fondo no son adorno. Son la forma de un barrido de
- * sonar, que es lo que estos carros hacen, y ademas amarran la tipografia a la
- * ilustracion en vez de dejarlas como dos bloques sueltos.
+ * El volumen de capsula no sale de redondear mas las esquinas sino de como cae la
+ * luz: sombra propia, borde iluminado arriba y apagado abajo, un lustre en la mitad
+ * de arriba y penumbra en la de abajo. Agrandar el radio la habria hecho mas
+ * redonda pero igual de plana.
  */
 @Composable
 private fun TarjetaCarro(
@@ -168,40 +170,33 @@ private fun TarjetaCarro(
         modifier = Modifier
             .width(ancho)
             .height(alto)
-            .clip(RoundedCornerShape(26.dp))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        acento.copy(alpha = 0.34f),
-                        acento.copy(alpha = 0.10f),
-                        Color(0xFF060A16),
-                    ),
-                    start = Offset(0f, 0f),
-                    end = Offset(0f, Float.POSITIVE_INFINITY)
-                )
+            // La sombra va tenida del acento y no en negro: sobre un fondo casi negro
+            // una sombra negra no se ve, y el halo de color es lo que despega la
+            // tarjeta del fondo y la deja flotando.
+            .shadow(
+                elevation = if (esUltimo) 26.dp else 16.dp,
+                shape = FORMA,
+                ambientColor = acento,
+                spotColor = acento
             )
-            .border(
-                width = if (esUltimo) 2.dp else 1.dp,
-                color = acento.copy(alpha = if (esUltimo) 0.9f else 0.35f),
-                shape = RoundedCornerShape(26.dp)
+            .clip(FORMA)
+            // Base opaca antes del tinte. El degradado del acento es semitransparente
+            // arriba, y sin algo solido debajo la sombra de color que va detras se
+            // transparentaba a traves de la tarjeta y dibujaba su propio rectangulo.
+            .background(Color(0xFF05080F))
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        acento.copy(alpha = 0.30f),
+                        acento.copy(alpha = 0.11f),
+                        Color.Transparent,
+                    )
+                )
             )
             .clickable(onClick = onClick)
     ) {
         ArcosDeBarrido(acento = acento, modifier = Modifier.fillMaxSize())
-
-        // Brillo de arriba, que es lo que le da volumen al degradado plano.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(alto * 0.42f)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(acento.copy(alpha = 0.22f), Color.Transparent),
-                        center = Offset(ancho.value * 1.2f, 0f),
-                        radius = ancho.value * 2.4f
-                    )
-                )
-        )
+        LuzDeCapsula(modifier = Modifier.fillMaxSize())
 
         Chip(texto = carro.cerebro, acento = acento,
             modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
@@ -248,8 +243,9 @@ private fun TarjetaCarro(
                 modifier = Modifier.padding(start = 15.dp)
             )
 
-            // El desborde es a proposito: el bloque se empuja hacia abajo y el recorte
-            // de la tarjeta se come el pie de las letras.
+            // Apoyado sobre el borde pero sin tocarlo. El desborde de la primera version
+            // dejaba el canto de la tarjeta cortando el pie de las letras, y un canto
+            // iluminado atravesando una palabra se lee como un defecto y no como estilo.
             Text(
                 text = carro.nombre.uppercase(),
                 color = Neon.TextPrimary,
@@ -261,10 +257,78 @@ private fun TarjetaCarro(
                 textAlign = TextAlign.Start,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp)
-                    .offset(y = tamanoNombre.dp * 0.30f)
+                    .padding(start = 12.dp, bottom = 12.dp)
             )
         }
+
+        // El canto, encima de todo. Va con degradado y no con un color plano: claro
+        // arriba, del acento en el medio y oscuro abajo, que es como se comporta el
+        // filo de una pieza redondeada bajo una luz que viene de arriba. Un borde de
+        // un solo color deja la tarjeta pegada al fondo, como recortada en papel.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .border(
+                    width = if (esUltimo) 2.dp else 1.4.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = if (esUltimo) 0.75f else 0.5f),
+                            acento.copy(alpha = if (esUltimo) 0.85f else 0.45f),
+                            Color.Black.copy(alpha = 0.5f),
+                        )
+                    ),
+                    shape = FORMA
+                )
+        )
+    }
+}
+
+/**
+ * Las tres capas de luz que dan el volumen de capsula.
+ *
+ * Van juntas en un Canvas y no como tres cajas con degradado de fondo: Brush pide las
+ * coordenadas del centro y del radio en pixeles, y pasarle valores en dp deja el
+ * reflejo del tamano equivocado y con un canto recto a la vista. Aqui el tamano llega
+ * ya en pixeles y las tres se ubican contra el mismo sistema.
+ */
+@Composable
+private fun LuzDeCapsula(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        /* Lustre: la mitad de arriba recibe luz y se apaga hacia el medio. Es lo que
+         * hace leer la superficie como curva en vez de plana. */
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.White.copy(alpha = 0.11f), Color.Transparent),
+                startY = 0f,
+                endY = size.height * 0.55f
+            ),
+            size = Size(size.width, size.height * 0.55f)
+        )
+
+        /* Reflejo especular. Un unico punto de luz definido es lo que separa una
+         * superficie lustrosa de una mate; sin el, el lustre solo aclara. */
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color.White.copy(alpha = 0.16f), Color.Transparent),
+                center = Offset(size.width * 0.34f, -size.height * 0.06f),
+                radius = size.width * 0.85f
+            ),
+            radius = size.width * 0.85f,
+            center = Offset(size.width * 0.34f, -size.height * 0.06f)
+        )
+
+        /* Penumbra de abajo. Sin ella la tarjeta se ve iluminada pero chata: el cuerpo
+         * aparece recien cuando hay una zona que la luz no alcanza. */
+        val altoSombra = size.height * 0.42f
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.5f)),
+                startY = size.height - altoSombra,
+                endY = size.height
+            ),
+            topLeft = Offset(0f, size.height - altoSombra),
+            size = Size(size.width, altoSombra)
+        )
     }
 }
 
@@ -317,8 +381,14 @@ private fun Chip(texto: String, acento: Color, modifier: Modifier = Modifier) {
         fontWeight = FontWeight.Bold,
         modifier = modifier
             .clip(RoundedCornerShape(99.dp))
-            .background(Color.White.copy(alpha = 0.10f))
-            .border(1.dp, acento.copy(alpha = 0.35f), RoundedCornerShape(99.dp))
+            .background(Color.White.copy(alpha = 0.12f))
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.45f), acento.copy(alpha = 0.2f))
+                ),
+                shape = RoundedCornerShape(99.dp)
+            )
             .padding(horizontal = 9.dp, vertical = 4.dp)
     )
 }
