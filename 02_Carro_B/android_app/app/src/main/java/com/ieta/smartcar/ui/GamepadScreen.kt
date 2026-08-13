@@ -63,6 +63,12 @@ import com.ieta.smartcar.link.RedWifi
 import com.ieta.smartcar.link.TcpClient
 import com.ieta.smartcar.ui.theme.Neon
 
+/** Lo que ocupa la barra superior con su margen. Sirve para repartir lo que queda. */
+private val ALTO_BARRA = 58.dp
+
+/** Lo que ocupa la fila de botones de abajo con su margen. */
+private val ALTO_BOTONERA = 98.dp
+
 @Composable
 fun GamepadScreen(
     viewModel: ControllerViewModel,
@@ -201,12 +207,29 @@ fun GamepadScreen(
             // de botones. Mirar el radar mientras se maneja es lo que le da sentido: un
             // obstaculo a la derecha solo sirve si se ve antes de doblar.
             if (viewModel.carro.capacidades.radar) {
+                // El radar ocupa toda la banda libre entre la barra de arriba y la fila
+                // de botones. Se calculan los dos limites y manda el mas chico: en un
+                // telefono ancho lo que aprieta es el alto, y en uno angosto son los
+                // sticks, que dejan poco pasillo en el medio.
+                //
+                // Los 44 dp que se descuentan son el aire de arriba y de abajo mas el
+                // renglon de rotulos. Llenando la banda entera el recuadro terminaba
+                // tocando la barra y los rotulos quedaban pegados a los botones.
+                val bandaLibre = maxHeight - ALTO_BARRA - ALTO_BOTONERA
+                val porAlto = (bandaLibre - 44.dp) / 0.62f
+                val porAncho = maxWidth - (stickDiameter + 20.dp) * 2 - 20.dp
+
                 RadarPanel(
                     ecos = viewModel.ecos,
                     anguloActual = viewModel.anguloSonar,
                     conectado = linkState == LinkState.CONNECTED,
                     progresoEscaneo = viewModel.progresoEscaneo,
-                    modifier = Modifier.align(Alignment.Center)
+                    ancho = minOf(porAlto, porAncho).coerceIn(190.dp, 330.dp),
+                    // Colgado de la barra y no centrado: centrado dejaba un hueco muerto
+                    // arriba, y ese hueco es justo lo que le faltaba de tamano.
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = ALTO_BARRA + 10.dp)
                 )
             } else {
                 CenterConsole(
