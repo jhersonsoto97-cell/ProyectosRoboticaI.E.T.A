@@ -32,6 +32,7 @@
 #include "esp_timer.h"
 #include "nvs_flash.h"
 
+#include "ajustes.h"
 #include "config.h"
 #include "diag.h"
 #include "drive.h"
@@ -131,6 +132,11 @@ void app_main(void) {
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
+
+    /* Antes que los modulos que la consumen: drive y sonar leen la calibracion
+     * en su arranque, y con NVS todavia sin abrir usarian los valores de
+     * compilacion aunque hubiera una calibracion guardada. */
+    ajustes_iniciar();
 
     drive_iniciar();
     sonar_iniciar();

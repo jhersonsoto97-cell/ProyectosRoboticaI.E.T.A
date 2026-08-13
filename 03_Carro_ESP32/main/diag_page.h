@@ -63,6 +63,14 @@ static const char PAGINA_DIAG[] = R"HTMLDIAG(
     white-space:pre-wrap;word-break:break-word;
     font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#bcd4e8}
 
+  .ajuste{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:7px 0;border-bottom:1px solid rgba(30,44,74,.6)}
+  .ajuste:last-child{border-bottom:none}
+  .ajuste .k{font-size:10px;letter-spacing:1px;color:var(--tenue);font-weight:700}
+  .mando{display:flex;align-items:center;gap:10px}
+  .mando .v{font-size:14px;font-weight:700;min-width:58px;text-align:center;
+    font-variant-numeric:tabular-nums}
+
   .fila{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .fila .rotulo{margin:0;flex:1}
   .mini{padding:5px 10px;font-size:10px;letter-spacing:1px}
@@ -102,6 +110,17 @@ static const char PAGINA_DIAG[] = R"HTMLDIAG(
   <div class="aviso">
     Las pruebas de motor mueven las ruedas. Levanta el carro antes de tocarlas.
     El resultado aparece abajo en unos segundos.
+  </div>
+</div>
+
+<div class="panel">
+  <div class="fila">
+    <div class="rotulo">CALIBRACION</div>
+    <button class="mini" onclick="restaurar()">DE FABRICA</button>
+  </div>
+  <div id="ajustes"></div>
+  <div class="aviso">
+    Cada cambio se guarda solo en el carro y sobrevive al apagado.
   </div>
 </div>
 
@@ -169,7 +188,67 @@ function probar(cual){
   fetch('/probar?q=' + cual);
 }
 
+// Rotulo y paso de cada ajuste. El paso importa: mover un trim de a 1 es
+// perder la tarde, y mover el tiempo de giro de a 1 ms no cambia nada.
+const AJUSTES = [
+  ['trim_izquierda', 'TRIM RUEDA IZQ',    '%',  5],
+  ['trim_derecha',   'TRIM RUEDA DER',    '%',  5],
+  ['pwm_min',        'PWM MINIMO',        '',   5],
+  ['invertir_izq',   'INVERTIR IZQ',      '',   1],
+  ['invertir_der',   'INVERTIR DER',      '',   1],
+  ['angulo_min',     'SERVO: TOPE IZQ',   '°', 5],
+  ['angulo_max',     'SERVO: TOPE DER',   '°', 5],
+  ['pwm_giro',       'FUERZA DEL GIRO',   '',  10],
+  ['giro_ms',        'DURACION DEL GIRO', 'ms', 50]
+];
+
+function pintarAjustes(v){
+  const caja = document.getElementById('ajustes');
+  caja.innerHTML = '';
+
+  for (const [clave, rotulo, unidad, paso] of AJUSTES) {
+    const fila = document.createElement('div');
+    fila.className = 'ajuste';
+
+    // Los booleanos se muestran como un solo boton que alterna, no como un par
+    // de flechas: sumarle 1 a algo que solo vale 0 o 1 no significa nada.
+    const esBooleano = (paso === 1 && clave.indexOf('invertir') === 0);
+
+    fila.innerHTML =
+      '<div class="k">' + rotulo + '</div>' +
+      (esBooleano
+        ? '<button class="mini" onclick="fijar(\'' + clave + '\',' + (v[clave] ? 0 : 1) + ')">' +
+            (v[clave] ? 'SI' : 'NO') + '</button>'
+        : '<div class="mando">' +
+            '<button class="mini" onclick="fijar(\'' + clave + '\',' + (v[clave] - paso) + ')">−</button>' +
+            '<span class="v">' + v[clave] + unidad + '</span>' +
+            '<button class="mini" onclick="fijar(\'' + clave + '\',' + (v[clave] + paso) + ')">+</button>' +
+          '</div>');
+
+    caja.appendChild(fila);
+  }
+}
+
+async function fijar(clave, valor){
+  // El carro responde con el estado completo, asi que la pantalla se repinta
+  // con lo que quedo de verdad y no con lo que se pidio. Si el valor se recorto
+  // por estar fuera de rango, se ve al instante.
+  try { pintarAjustes(await (await fetch('/ajustar?k=' + clave + '&v=' + valor)).json()); }
+  catch (err) {}
+}
+
+async function restaurar(){
+  try { pintarAjustes(await (await fetch('/ajustar?k=reset')).json()); }
+  catch (err) {}
+}
+
+async function pedirAjustes(){
+  try { pintarAjustes(await (await fetch('/ajustes')).json()); }
+  catch (err) {}
+}
+
 pintarSeguir();
+pedirAjustes();
 pedirEstado();
 pedirLog();
 setInterval(pedirEstado, 1000);

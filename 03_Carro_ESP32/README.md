@@ -25,12 +25,21 @@ Placa **DevKit v1 de 30 pines**, modulo WROOM-32.
 
 | Funcion | GPIO |
 |---|---|
-| Motor izquierdo — IN1 | 26 |
-| Motor izquierdo — IN2 | 27 |
-| Motor izquierdo — ENA (PWM) | 25 |
-| Motor derecho — IN3 | 32 |
+| Motor izquierdo — ENA (PWM) | 14 |
+| Motor izquierdo — IN1 | 27 |
+| Motor izquierdo — IN2 | 26 |
+| Motor derecho — IN3 | 25 |
 | Motor derecho — IN4 | 33 |
-| Motor derecho — ENB (PWM) | 14 |
+| Motor derecho — ENB (PWM) | 32 |
+
+Los seis del driver caen en pines fisicamente consecutivos de la placa y en el mismo orden
+que su header, asi que el mazo va derecho y sin cruces:
+
+```
+  ESP32   14    27    26    25    33    32
+          |     |     |     |     |     |
+  L298N  ENA   IN1   IN2   IN3   IN4   ENB
+```
 | Servo — senal | 18 |
 | HC-SR04 — TRIG | 19 |
 | HC-SR04 — ECHO | 21 (**con divisor**) |

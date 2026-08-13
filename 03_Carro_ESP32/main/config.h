@@ -38,13 +38,19 @@
  *     0, 5         pines de arranque, deciden el modo de boot
  *     1, 3         los usa el USB para programar y monitorear
  * ------------------------------------------------------------ */
-#define PIN_IZQ_ADELANTE   GPIO_NUM_26
-#define PIN_IZQ_ATRAS      GPIO_NUM_27
-#define PIN_IZQ_PWM        GPIO_NUM_25
+/* Los seis del driver van en pines fisicamente consecutivos de la placa y en el
+ * mismo orden que su header, de modo que el mazo sale derecho y sin cruces:
+ *
+ *     ESP32   14   27   26   25   33   32
+ *     L298N   ENA  IN1  IN2  IN3  IN4  ENB
+ */
+#define PIN_IZQ_PWM        GPIO_NUM_14   /* ENA */
+#define PIN_IZQ_ADELANTE   GPIO_NUM_27   /* IN1 */
+#define PIN_IZQ_ATRAS      GPIO_NUM_26   /* IN2 */
 
-#define PIN_DER_ADELANTE   GPIO_NUM_32
-#define PIN_DER_ATRAS      GPIO_NUM_33
-#define PIN_DER_PWM        GPIO_NUM_14
+#define PIN_DER_ADELANTE   GPIO_NUM_25   /* IN3 */
+#define PIN_DER_ATRAS      GPIO_NUM_33   /* IN4 */
+#define PIN_DER_PWM        GPIO_NUM_32   /* ENB */
 
 #define PIN_SERVO          GPIO_NUM_18
 #define PIN_SONAR_TRIG     GPIO_NUM_19

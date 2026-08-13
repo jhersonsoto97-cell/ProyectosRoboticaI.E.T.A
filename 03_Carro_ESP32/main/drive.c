@@ -1,4 +1,5 @@
 #include "drive.h"
+#include "ajustes.h"
 #include "config.h"
 
 #include <stdlib.h>
@@ -37,12 +38,14 @@ static int16_t escalar(int16_t crudo, int16_t trim) {
         return 0;
     }
 
+    const int16_t piso = ajustes()->pwm_min;
+
     const int16_t techo = limitar((int16_t)(((int32_t)PWM_MAX * trim) / 100),
-                                  PWM_MIN, PWM_MAX);
+                                  piso, PWM_MAX);
 
     int16_t magnitud = limitar((int16_t)abs(crudo), 1, PWM_MAX);
-    magnitud = PWM_MIN + (int16_t)(((int32_t)(magnitud - 1) * (techo - PWM_MIN)) /
-                                   (PWM_MAX - 1));
+    magnitud = piso + (int16_t)(((int32_t)(magnitud - 1) * (techo - piso)) /
+                                (PWM_MAX - 1));
 
     return (crudo < 0) ? (int16_t)(-magnitud) : magnitud;
 }
@@ -85,9 +88,9 @@ static void aplicar_canal(gpio_num_t pin_adelante, gpio_num_t pin_atras,
 
 static void escribir_salidas(void) {
     aplicar_canal(PIN_IZQ_ADELANTE, PIN_IZQ_ATRAS, CANAL_IZQ,
-                  actual_izq, INVERTIR_IZQUIERDA);
+                  actual_izq, ajustes()->invertir_izq);
     aplicar_canal(PIN_DER_ADELANTE, PIN_DER_ATRAS, CANAL_DER,
-                  actual_der, INVERTIR_DERECHA);
+                  actual_der, ajustes()->invertir_der);
 }
 
 void drive_iniciar(void) {
@@ -130,8 +133,8 @@ void drive_iniciar(void) {
 }
 
 void drive_pedir(int16_t izquierda, int16_t derecha) {
-    objetivo_izq = escalar(limitar(izquierda, -PWM_MAX, PWM_MAX), TRIM_IZQUIERDA);
-    objetivo_der = escalar(limitar(derecha, -PWM_MAX, PWM_MAX), TRIM_DERECHA);
+    objetivo_izq = escalar(limitar(izquierda, -PWM_MAX, PWM_MAX), ajustes()->trim_izquierda);
+    objetivo_der = escalar(limitar(derecha, -PWM_MAX, PWM_MAX), ajustes()->trim_derecha);
     marca_ultima_orden = esp_timer_get_time();
     enlace_vivo = true;
     failsafe_disparado = false;
@@ -196,14 +199,14 @@ void drive_probar_motor(bool izquierdo) {
 
     if (izquierdo) {
         pulso_motor("izquierdo", PIN_IZQ_ADELANTE, PIN_IZQ_ATRAS, CANAL_IZQ,
-                    AUTOPRUEBA_PWM, INVERTIR_IZQUIERDA, "adelante");
+                    AUTOPRUEBA_PWM, ajustes()->invertir_izq, "adelante");
         pulso_motor("izquierdo", PIN_IZQ_ADELANTE, PIN_IZQ_ATRAS, CANAL_IZQ,
-                    -AUTOPRUEBA_PWM, INVERTIR_IZQUIERDA, "atras   ");
+                    -AUTOPRUEBA_PWM, ajustes()->invertir_izq, "atras   ");
     } else {
         pulso_motor("derecho  ", PIN_DER_ADELANTE, PIN_DER_ATRAS, CANAL_DER,
-                    AUTOPRUEBA_PWM, INVERTIR_DERECHA, "adelante");
+                    AUTOPRUEBA_PWM, ajustes()->invertir_der, "adelante");
         pulso_motor("derecho  ", PIN_DER_ADELANTE, PIN_DER_ATRAS, CANAL_DER,
-                    -AUTOPRUEBA_PWM, INVERTIR_DERECHA, "atras   ");
+                    -AUTOPRUEBA_PWM, ajustes()->invertir_der, "atras   ");
     }
 
     drive_detener();
@@ -223,8 +226,8 @@ void drive_autoprueba(void) {
 void drive_girar_sobre_eje(int16_t pwm, uint32_t duracion_ms) {
     /* Se saltan la rampa y el failsafe a proposito: es una maniobra cerrada, de
      * duracion conocida, y una rampa cambiaria el angulo recorrido. */
-    actual_izq = escalar(pwm, TRIM_IZQUIERDA);
-    actual_der = escalar((int16_t)(-pwm), TRIM_DERECHA);
+    actual_izq = escalar(pwm, ajustes()->trim_izquierda);
+    actual_der = escalar((int16_t)(-pwm), ajustes()->trim_derecha);
     escribir_salidas();
 
     vTaskDelay(pdMS_TO_TICKS(duracion_ms));

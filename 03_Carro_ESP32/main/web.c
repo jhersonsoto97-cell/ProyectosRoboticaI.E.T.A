@@ -1,4 +1,5 @@
 #include "web.h"
+#include "ajustes.h"
 #include "config.h"
 #include "diag.h"
 #include "drive.h"
@@ -169,6 +170,44 @@ static esp_err_t manejar_probar(httpd_req_t *req) {
     return httpd_resp_sendstr(req, "prueba desconocida");
 }
 
+static esp_err_t manejar_ajustes(httpd_req_t *req) {
+    char json[384];
+    const size_t n = ajustes_json(json, sizeof(json));
+
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_send(req, json, n);
+}
+
+/**
+ * Cambia un ajuste, o los devuelve todos a fabrica con ?k=reset.
+ *
+ * Responde con el estado completo y no con "ok": asi la pantalla se entera del
+ * valor que realmente quedo despues del recorte, en vez de mostrar el que pidio
+ * y desincronizarse del carro sin que nadie lo note.
+ */
+static esp_err_t manejar_ajustar(httpd_req_t *req) {
+    char consulta[64];
+    char clave[24];
+    char valor[12];
+
+    if (httpd_req_get_url_query_str(req, consulta, sizeof(consulta)) == ESP_OK &&
+        httpd_query_key_value(consulta, "k", clave, sizeof(clave)) == ESP_OK) {
+
+        if (strcmp(clave, "reset") == 0) {
+            ajustes_restaurar();
+            return manejar_ajustes(req);
+        }
+
+        if (httpd_query_key_value(consulta, "v", valor, sizeof(valor)) == ESP_OK &&
+            ajustes_fijar(clave, atoi(valor))) {
+            return manejar_ajustes(req);
+        }
+    }
+
+    httpd_resp_set_status(req, "400 Bad Request");
+    return httpd_resp_sendstr(req, "ajuste desconocido");
+}
+
 static esp_err_t manejar_ws(httpd_req_t *req) {
     /* El apreton de manos llega como GET. Aqui solo se registra el cliente. */
     if (req->method == HTTP_GET) {
@@ -281,6 +320,9 @@ void web_iniciar(void) {
     cfg.core_id = 1;
     cfg.lru_purge_enable = true;
     cfg.max_open_sockets = WIFI_MAX_CLIENTES + 2;
+    /* El valor de fabrica son 8 y ya se registran 8. Sin margen, la proxima ruta
+     * que se agregue falla en silencio al arrancar. */
+    cfg.max_uri_handlers = 12;
 
     if (httpd_start(&servidor, &cfg) != ESP_OK) {
         ESP_LOGE(TAG, "no se pudo arrancar el servidor");
@@ -307,6 +349,8 @@ void web_iniciar(void) {
         { .uri = "/log",    .method = HTTP_GET, .handler = manejar_log },
         { .uri = "/estado", .method = HTTP_GET, .handler = manejar_estado },
         { .uri = "/probar", .method = HTTP_GET, .handler = manejar_probar },
+        { .uri = "/ajustes", .method = HTTP_GET, .handler = manejar_ajustes },
+        { .uri = "/ajustar", .method = HTTP_GET, .handler = manejar_ajustar },
     };
     for (size_t i = 0; i < sizeof(rutas_diag) / sizeof(rutas_diag[0]); ++i) {
         httpd_register_uri_handler(servidor, &rutas_diag[i]);
