@@ -20,6 +20,9 @@ import com.ieta.smartcar.link.LinkState
 import com.ieta.smartcar.link.Radio
 import com.ieta.smartcar.link.SppClient
 import com.ieta.smartcar.link.TcpClient
+import com.ieta.smartcar.protocolo.OrdenCarro
+import com.ieta.smartcar.protocolo.Protocolo
+import com.ieta.smartcar.protocolo.ProtocoloMega
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -43,8 +46,17 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     val ble = BleClient(application, adapter, viewModelScope)
     val tcp = TcpClient(viewModelScope)
 
-    /** Enlace en uso. Los tres hablan el mismo protocolo, solo cambia el medio. */
+    /** Medio por el que viajan las tramas. */
     var link: CarLink by mutableStateOf(spp); private set
+
+    /**
+     * Idioma del carro conectado.
+     *
+     * Separado del transporte a proposito: el medio y el formato no tienen por que ir
+     * de la mano. El simulador del PC habla el idioma del Mega sobre TCP, y el mismo
+     * idioma viaja igual por BLE.
+     */
+    var protocolo: Protocolo by mutableStateOf(ProtocoloMega); private set
 
     private var connectJob: Job? = null
 
@@ -252,12 +264,19 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         // nada: son 50 ms frente a los 400 ms del failsafe.
         val ahora = System.currentTimeMillis()
         if (ahora - lastTrimSent >= TRIM_PERIOD_MS) {
-            lastTrimSent = ahora
-            link.send("{$reverseTrimLeft,$reverseTrimRight}\n")
-            return
+            // Un carro que resuelve la compensacion por su cuenta devuelve null aqui, y
+            // en ese caso el tick no se desperdicia: sigue de largo y manda conduccion.
+            val calibracion = protocolo.codificar(
+                OrdenCarro.TrimReversa(reverseTrimLeft, reverseTrimRight)
+            )
+            if (calibracion != null) {
+                lastTrimSent = ahora
+                link.send(calibracion)
+                return
+            }
         }
 
-        link.send("<${power.left},${power.right}>\n")
+        protocolo.codificar(OrdenCarro.Conducir(power.left, power.right))?.let { link.send(it) }
     }
 
     override fun onCleared() {
