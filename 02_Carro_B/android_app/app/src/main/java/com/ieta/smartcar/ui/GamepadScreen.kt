@@ -2,6 +2,7 @@ package com.ieta.smartcar.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -80,6 +81,11 @@ fun GamepadScreen(
     var showCalibration by remember { mutableStateOf(false) }
     var showSocial by remember { mutableStateOf(false) }
 
+    // El boton atras del sistema vuelve al garaje en vez de cerrar la app. Es donde
+    // cualquiera lo busca primero, y sin esto la unica salida quedaba enterrada dentro
+    // del dialogo de conexion.
+    BackHandler(enabled = true) { onCambiarCarro() }
+
     // La telemetria periodica pisa el eco de la calibracion a los pocos cientos de
     // milisegundos, asi que se retiene aparte. Si no, la confirmacion aparece y
     // desaparece antes de que alcance a leerse.
@@ -104,6 +110,8 @@ fun GamepadScreen(
             val stickDiameter = (maxHeight * 0.52f).coerceIn(150.dp, 260.dp)
 
             TopBar(
+                carro = viewModel.carro,
+                onCambiarCarro = onCambiarCarro,
                 linkState = linkState,
                 deviceName = deviceName,
                 leftPower = viewModel.wheelPower.left,
@@ -499,6 +507,8 @@ private fun StepButton(label: String, accent: Color, onClick: () -> Unit) {
 
 @Composable
 private fun TopBar(
+    carro: Carro,
+    onCambiarCarro: () -> Unit,
     linkState: LinkState,
     deviceName: String?,
     leftPower: Int,
@@ -510,6 +520,32 @@ private fun TopBar(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Que carro se esta manejando, y la puerta de vuelta al garaje en el mismo
+        // gesto. Van juntos porque quien quiere cambiar de carro mira primero cual
+        // tiene puesto.
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(99.dp))
+                .background(Neon.Surface)
+                .border(1.dp, Neon.Outline, RoundedCornerShape(99.dp))
+                .clickable(onClick = onCambiarCarro)
+                .padding(start = 9.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("‹", color = Neon.Cyan, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(7.dp))
+            Text(
+                text = carro.nombre.uppercase(),
+                color = Neon.TextPrimary,
+                fontSize = 11.sp,
+                letterSpacing = 1.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+
+        Spacer(Modifier.width(10.dp))
+
         StatusChip(text = statusText(linkState, deviceName), color = statusColor(linkState))
 
         Spacer(Modifier.width(16.dp))
