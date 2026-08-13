@@ -89,6 +89,11 @@
 #define INVERTIR_IZQUIERDA  false
 #define INVERTIR_DERECHA    false
 
+/* El brazo del sonar puede quedar montado en espejo segun de que lado del chasis
+ * se atornille el servo. Si la aguja del radar se mueve hacia el lado contrario
+ * al que apunta el sensor, este pasa a true. */
+#define INVERTIR_SERVO      true
+
 /* Piso de torque: por debajo de este PWM el motor zumba pero no gira. */
 #define PWM_MIN            70
 #define PWM_MAX            255

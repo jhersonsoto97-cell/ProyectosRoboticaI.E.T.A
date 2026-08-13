@@ -29,6 +29,7 @@ typedef struct {
 
     int16_t angulo_min;       /* recorrido util del servo, en grados */
     int16_t angulo_max;
+    int16_t invertir_servo;   /* 0 o 1, segun de que lado quedo montado el brazo */
 
     int16_t pwm_giro;         /* giro sobre el eje entre sectores del escaneo */
     int16_t giro_ms;

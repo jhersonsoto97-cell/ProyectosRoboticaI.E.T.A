@@ -15,7 +15,7 @@ static const char *TAG = "ajustes";
 
 /* Sube cuando cambia la forma del struct. Un blob guardado con la forma vieja se
  * descarta en vez de leerse torcido, que es peor que perder la calibracion. */
-#define VERSION  1
+#define VERSION  2
 
 static ajustes_t vigentes;
 
@@ -27,6 +27,7 @@ static const ajustes_t DE_FABRICA = {
     .invertir_der   = INVERTIR_DERECHA ? 1 : 0,
     .angulo_min     = ANGULO_MIN,
     .angulo_max     = ANGULO_MAX,
+    .invertir_servo = INVERTIR_SERVO ? 1 : 0,
     .pwm_giro       = PWM_GIRO,
     .giro_ms        = GIRO_MS,
 };
@@ -54,6 +55,7 @@ static const campo_t CAMPOS[] = {
      * lo hace trabajar contra el tope mecanico, que zumba y lo desgasta. */
     CAMPO(angulo_min,      0,  90),
     CAMPO(angulo_max,     90, 180),
+    CAMPO(invertir_servo,  0,   1),
     CAMPO(pwm_giro,       60, 255),
     CAMPO(giro_ms,       100, 3000),
 };

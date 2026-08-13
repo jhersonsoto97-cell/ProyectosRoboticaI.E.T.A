@@ -77,13 +77,6 @@ static void servo_escribir(int grados) {
  *   Medicion
  * ------------------------------------------------------------ */
 /**
- * Una medicion del HC-SR04.
- *
- * Devuelve distancia negativa cuando no hubo eco, en vez de cero: cero es una
- * distancia valida, y confundirlos haria aparecer obstaculos pegados al sensor
- * justo donde en realidad no hay nada que devuelva la senal.
- */
-/**
  * Como termino una medicion.
  *
  * Operando no interesa el detalle: hay eco o no lo hay. Diagnosticando es lo
@@ -140,15 +133,25 @@ static float medir_cm(void) {
 }
 
 /**
- * Publica en grados relativos al frente del carro, no en grados de servo.
+ * Del angulo del servo al marco del carro: 0 al frente, positivo hacia la
+ * derecha vista desde arriba.
  *
- * El cero del servo es un tope mecanico que no significa nada para quien mira
- * la pantalla. Convirtiendo aqui, el resto del sistema trabaja siempre en el
- * marco del carro: 0 es hacia adelante y crece hacia la derecha.
+ * El cero del servo es un tope mecanico que no significa nada para quien mira la
+ * pantalla. Convirtiendo aqui, el resto del sistema trabaja siempre en el marco
+ * del carro.
+ *
+ * El signo depende de que lado del chasis quedo atornillado el servo, asi que
+ * es calibracion y no una constante. Con el brazo montado en espejo, la aguja
+ * del radar se movia hacia el lado contrario al que apuntaba el sensor.
  */
+static int16_t a_grados_carro(int angulo_servo) {
+    const int relativo = angulo_servo - 90;
+    return (int16_t)(ajustes()->invertir_servo ? -relativo : relativo);
+}
+
 static void publicar(int angulo_servo, float cm) {
     portENTER_CRITICAL(&mux);
-    ultima.angulo = (int16_t)(angulo_servo - 90);
+    ultima.angulo = a_grados_carro(angulo_servo);
     ultima.distancia_cm = cm;
     hay_nueva = true;
     portEXIT_CRITICAL(&mux);
@@ -249,7 +252,7 @@ void sonar_probar_servo(void) {
     const int posiciones[] = { ajustes()->angulo_min, ajustes()->angulo_max, centro };
 
     for (int i = 0; i < 3; ++i) {
-        ESP_LOGI(TAG_SONAR, "  a %d grados", posiciones[i] - 90);
+        ESP_LOGI(TAG_SONAR, "  a %d grados", a_grados_carro(posiciones[i]));
         servo_escribir(posiciones[i]);
         /* Medio segundo por posicion: el recorrido completo de un SG90 tarda
          * unos 400 ms y hay que poder verlo llegar, no solo salir. */
@@ -295,7 +298,7 @@ int sonar_ejecutar_escaneo(void) {
             const float cm = medir_en(a);
 
             /* Mismo marco que las lecturas vivas: 0 es el frente inicial. */
-            puntos[cantidad_puntos].angulo = (int16_t)(offset + (a - 90));
+            puntos[cantidad_puntos].angulo = (int16_t)(offset + a_grados_carro(a));
             puntos[cantidad_puntos].distancia_cm = cm;
             ++cantidad_puntos;
 
@@ -357,24 +360,24 @@ void sonar_autoprueba(void) {
                     minima = cm;
                 }
                 ESP_LOGI(TAG_SONAR, "  %3d grados -> %6.1f cm   (pulso %lld us)",
-                         a - 90, cm, ancho);
+                         a_grados_carro(a), cm, ancho);
                 break;
 
             case ECO_SIN_FLANCO:
                 ++sinFlanco;
                 ESP_LOGI(TAG_SONAR, "  %3d grados -> sin flanco: el ECHO nunca subio",
-                         a - 90);
+                         a_grados_carro(a));
                 break;
 
             case ECO_NO_BAJA:
                 ++noBaja;
-                ESP_LOGI(TAG_SONAR, "  %3d grados -> el ECHO subio y no bajo", a - 90);
+                ESP_LOGI(TAG_SONAR, "  %3d grados -> el ECHO subio y no bajo", a_grados_carro(a));
                 break;
 
             case ECO_FUERA_DE_RANGO:
                 ++fueraRango;
                 ESP_LOGI(TAG_SONAR, "  %3d grados -> pulso %lld us = %.1f cm, fuera de %.0f a %.0f",
-                         a - 90, ancho, cm, (double)ALCANCE_MIN_CM, (double)ALCANCE_MAX_CM);
+                         a_grados_carro(a), ancho, cm, (double)ALCANCE_MIN_CM, (double)ALCANCE_MAX_CM);
                 break;
         }
     }

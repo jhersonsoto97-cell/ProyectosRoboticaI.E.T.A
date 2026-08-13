@@ -198,6 +198,7 @@ const AJUSTES = [
   ['invertir_der',   'INVERTIR DER',      '',   1],
   ['angulo_min',     'SERVO: TOPE IZQ',   '°', 5],
   ['angulo_max',     'SERVO: TOPE DER',   '°', 5],
+  ['invertir_servo', 'INVERTIR RADAR',    '',   1],
   ['pwm_giro',       'FUERZA DEL GIRO',   '',  10],
   ['giro_ms',        'DURACION DEL GIRO', 'ms', 50]
 ];
