@@ -224,6 +224,8 @@ fun GamepadScreen(
                     anguloActual = viewModel.anguloSonar,
                     conectado = linkState == LinkState.CONNECTED,
                     progresoEscaneo = viewModel.progresoEscaneo,
+                    alcanceCm = viewModel.alcanceRadar,
+                    onAlcance = viewModel::ajustarAlcanceRadar,
                     ancho = minOf(porAlto, porAncho).coerceIn(190.dp, 330.dp),
                     // Colgado de la barra y no centrado: centrado dejaba un hueco muerto
                     // arriba, y ese hueco es justo lo que le faltaba de tamano.

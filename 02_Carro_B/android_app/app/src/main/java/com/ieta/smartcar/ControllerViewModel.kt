@@ -99,6 +99,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     /** Avance del escaneo en curso, de 0 a 100. En 100 el plano ya llego. */
     var progresoEscaneo by mutableStateOf(100); private set
 
+
     var leftStickX by mutableStateOf(0f); private set
     var leftStickY by mutableStateOf(0f); private set
     var rightStickX by mutableStateOf(0f); private set
@@ -133,6 +134,20 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     /** Cuanto mas debe recorrer el dedo respecto del circulo dibujado, en porcentaje. */
     var stickTravel by mutableStateOf(prefs.getInt(KEY_STICK_TRAVEL, DEFAULT_TRAVEL))
         private set
+
+    /**
+     * Hasta donde llega el borde del radar, en centimetros.
+     *
+     * Se guarda en disco como el resto de la calibracion: quien maneja en un pasillo
+     * angosto lo deja fino y no quiere volver a bajarlo en cada sesion.
+     */
+    var alcanceRadar by mutableStateOf(prefs.getInt(KEY_ALCANCE_RADAR, DEFAULT_ALCANCE))
+        private set
+
+    fun ajustarAlcanceRadar(cm: Int) {
+        alcanceRadar = cm.coerceIn(30, 250)
+        prefs.edit().putInt(KEY_ALCANCE_RADAR, alcanceRadar).apply()
+    }
 
     val stickTravelScale: Float get() = stickTravel / 100f
 
@@ -424,6 +439,11 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         const val KEY_STEER_AUTHORITY = "steer_authority"
         const val KEY_STICK_TRAVEL = "stick_travel"
         const val KEY_ULTIMO_CARRO = "ultimo_carro"
+        const val KEY_ALCANCE_RADAR = "alcance_radar"
+
+        /** Un metro y medio: alcanza para ver una pared de frente sin
+         *  aplastar contra el centro lo que hay cerca. */
+        const val DEFAULT_ALCANCE = 150
 
         /** Margen antes de descartar un transporte y probar el otro. */
         const val CONNECT_WINDOW_MS = 25_000L
