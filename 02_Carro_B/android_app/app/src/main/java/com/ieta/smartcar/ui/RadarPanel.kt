@@ -252,19 +252,23 @@ private fun DrawScope.dibujarRejilla(
     paso: Int,
     medidor: TextMeasurer,
 ) {
-    val guion = PathEffect.dashPathEffect(floatArrayOf(3f, 7f))
+    /* Los anillos van en cian con muy poca opacidad y no en el color de borde del tema:
+     * ese color es un azul oscuro casi igual al fondo del recuadro, asi que la rejilla
+     * se perdia. El cian se separa del fondo por tono en vez de por brillo, que es lo
+     * que la deja legible sin volverla protagonista frente a los ecos. */
+    val guion = PathEffect.dashPathEffect(floatArrayOf(3f, 6f))
 
     var distancia = paso
     while (distancia <= alcanceCm) {
         val r = radio * distancia / alcanceCm
         drawArc(
-            color = Neon.Outline.copy(alpha = 0.7f),
+            color = Neon.Cyan.copy(alpha = 0.20f),
             startAngle = 180f,
             sweepAngle = 180f,
             useCenter = false,
             topLeft = Offset(origen.x - r, origen.y - r),
             size = Size(r * 2f, r * 2f),
-            style = Stroke(width = 1f, pathEffect = guion)
+            style = Stroke(width = 1.2f, pathEffect = guion)
         )
 
         /* El valor del anillo, sobre el eje vertical. Sin el, cambiar el alcance mueve
@@ -291,11 +295,12 @@ private fun DrawScope.dibujarRejilla(
         distancia += paso
     }
 
-    /* Radios cada 45 grados: dan referencia de direccion sin competir con los ecos. */
+    /* Radios cada 45 grados: dan referencia de direccion sin competir con los ecos. Van
+     * a la mitad de opacidad que los anillos, que son los que llevan la escala. */
     for (grados in listOf(-90, -45, 0, 45, 90)) {
         val rad = Math.toRadians((grados - 90).toDouble())
         drawLine(
-            color = Neon.Outline.copy(alpha = 0.5f),
+            color = Neon.Cyan.copy(alpha = 0.10f),
             start = origen,
             end = Offset(
                 origen.x + (radio * cos(rad)).toFloat(),
