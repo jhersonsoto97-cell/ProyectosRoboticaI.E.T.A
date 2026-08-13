@@ -198,6 +198,7 @@ fun GamepadScreen(
             )
 
             CenterConsole(
+                porWifi = viewModel.carro.red != null,
                 linkState = linkState,
                 telemetry = telemetry,
                 error = lastError,
@@ -602,6 +603,7 @@ private fun TopBar(
 
 @Composable
 private fun CenterConsole(
+    porWifi: Boolean,
     linkState: LinkState,
     telemetry: String,
     error: String?,
@@ -627,7 +629,14 @@ private fun CenterConsole(
                 .clickable(onClick = onToggleConnection),
             contentAlignment = Alignment.Center
         ) {
-            BluetoothGlyph(tint = accent, glyphSize = 34.dp)
+            // El simbolo dice por que medio se conecta este carro. Con dos carros que se
+            // conectan distinto, un icono de Bluetooth sobre un enlace WiFi manda a
+            // buscar el problema en la radio equivocada.
+            if (porWifi) {
+                WifiGlyph(tint = accent, glyphSize = 34.dp)
+            } else {
+                BluetoothGlyph(tint = accent, glyphSize = 34.dp)
+            }
         }
 
         Spacer(Modifier.height(10.dp))

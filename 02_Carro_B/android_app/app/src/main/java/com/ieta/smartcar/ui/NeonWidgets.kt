@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.PathParser
@@ -59,6 +60,42 @@ fun BluetoothGlyph(
         scale(scale, scale, pivot = Offset.Zero) {
             drawPath(path, color = tint)
         }
+    }
+}
+
+/**
+ * Glifo de WiFi, para los carros que levantan su propia red.
+ *
+ * Dibujado con arcos y no con un trazado importado: son tres curvas concentricas y un
+ * punto, y describirlas con angulos deja el grosor y la separacion como numeros que se
+ * pueden ajustar, en vez de una cadena de coordenadas que hay que rehacer entera para
+ * mover algo.
+ */
+@Composable
+fun WifiGlyph(
+    tint: Color,
+    modifier: Modifier = Modifier,
+    glyphSize: Dp = 28.dp
+) {
+    Canvas(modifier = modifier.size(glyphSize)) {
+        val ancho = size.width
+        val origen = Offset(ancho / 2f, size.height * 0.82f)
+        val trazo = ancho * 0.11f
+
+        for (i in 1..3) {
+            val radio = ancho * (0.16f + 0.16f * i)
+            drawArc(
+                color = tint,
+                startAngle = 212f,
+                sweepAngle = 116f,
+                useCenter = false,
+                topLeft = Offset(origen.x - radio, origen.y - radio),
+                size = Size(radio * 2f, radio * 2f),
+                style = Stroke(width = trazo, cap = StrokeCap.Round)
+            )
+        }
+
+        drawCircle(color = tint, radius = trazo * 0.85f, center = origen)
     }
 }
 
