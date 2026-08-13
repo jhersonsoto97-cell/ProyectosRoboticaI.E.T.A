@@ -20,8 +20,17 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.ieta.smartcar.ui.GamepadScreen
+import com.ieta.smartcar.ui.GarajeScreen
 import com.ieta.smartcar.ui.SplashScreen
 import com.ieta.smartcar.ui.theme.SmartCarTheme
+
+/**
+ * Las tres pantallas del arranque.
+ *
+ * El garaje va en el medio y no escondido en los ajustes: es la primera decision de
+ * cada sesion, y mostrarla de entrada deja ver que la app maneja dos carros.
+ */
+private enum class Pantalla { PRESENTACION, GARAJE, MANDO }
 
 class MainActivity : ComponentActivity() {
 
@@ -62,7 +71,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SmartCarTheme {
-                var mostrarSplash by remember { mutableStateOf(true) }
+                var pantalla by remember { mutableStateOf(Pantalla.PRESENTACION) }
 
                 LaunchedEffect(Unit) {
                     if (requiredPermissions.isNotEmpty()) {
@@ -70,18 +79,31 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Cruce en vez de corte seco: el fondo es el mismo en las dos pantallas,
-                // asi que el desvanecido se lee como que la interfaz aparece encima del
-                // logo y no como un cambio de vista.
+                // Cruce en vez de corte seco: el fondo es el mismo en las tres pantallas,
+                // asi que el desvanecido se lee como que una aparece encima de la otra y
+                // no como un cambio de vista.
                 Crossfade(
-                    targetState = mostrarSplash,
+                    targetState = pantalla,
                     animationSpec = tween(420),
-                    label = "arranque"
-                ) { enSplash ->
-                    if (enSplash) {
-                        SplashScreen(onTerminado = { mostrarSplash = false })
-                    } else {
-                        GamepadScreen(viewModel = controller)
+                    label = "navegacion"
+                ) { actual ->
+                    when (actual) {
+                        Pantalla.PRESENTACION -> SplashScreen(
+                            onTerminado = { pantalla = Pantalla.GARAJE }
+                        )
+
+                        Pantalla.GARAJE -> GarajeScreen(
+                            ultimoUsado = controller.ultimoCarroUsado,
+                            onElegir = { elegido ->
+                                controller.elegirCarro(elegido)
+                                pantalla = Pantalla.MANDO
+                            }
+                        )
+
+                        Pantalla.MANDO -> GamepadScreen(
+                            viewModel = controller,
+                            onCambiarCarro = { pantalla = Pantalla.GARAJE }
+                        )
                     }
                 }
             }

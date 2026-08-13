@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ieta.smartcar.ControllerViewModel
+import com.ieta.smartcar.carro.Carro
 import com.ieta.smartcar.R
 import com.ieta.smartcar.control.DriveMode
 import com.ieta.smartcar.link.BtDevice
@@ -61,7 +62,10 @@ import com.ieta.smartcar.link.TcpClient
 import com.ieta.smartcar.ui.theme.Neon
 
 @Composable
-fun GamepadScreen(viewModel: ControllerViewModel) {
+fun GamepadScreen(
+    viewModel: ControllerViewModel,
+    onCambiarCarro: () -> Unit = {},
+) {
     val link = viewModel.link
     val linkState by link.state.collectAsState()
     val deviceName by link.endpointName.collectAsState()
@@ -221,6 +225,11 @@ fun GamepadScreen(viewModel: ControllerViewModel) {
         DisposableEffect(Unit) { onDispose { viewModel.stopScan() } }
 
         ConnectionDialog(
+            carro = viewModel.carro,
+            onCambiarCarro = {
+                showDevices = false
+                onCambiarCarro()
+            },
             devices = devices,
             scanning = scanning,
             bluetoothReady = viewModel.scanner.isBluetoothReady,
@@ -641,6 +650,8 @@ private fun BottomBar(
 
 @Composable
 private fun ConnectionDialog(
+    carro: Carro,
+    onCambiarCarro: () -> Unit,
     devices: List<BtDevice>,
     scanning: Boolean,
     bluetoothReady: Boolean,
@@ -659,7 +670,21 @@ private fun ConnectionDialog(
         containerColor = Neon.Surface,
         titleContentColor = Neon.TextPrimary,
         textContentColor = Neon.TextMuted,
-        title = { Text("Conectar", fontSize = 16.sp) },
+        title = {
+            // Que carro se esta conectando, arriba de todo: con dos carros que se
+            // conectan por medios distintos, equivocarse de uno lleva a buscar un
+            // dispositivo que nunca va a aparecer.
+            Column {
+                Text("Conectar", fontSize = 16.sp)
+                Text(
+                    text = "${carro.nombre.uppercase()}  ·  ${carro.medio}",
+                    color = Neon.Cyan.copy(alpha = 0.8f),
+                    fontSize = 10.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
         text = {
             // En landscape el dialogo es muy bajo. Sin scroll, la lista de dispositivos
             // queda fuera de la pantalla y el usuario cree que la app no los encuentra.
@@ -795,6 +820,11 @@ private fun ConnectionDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cerrar", color = Neon.Cyan)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCambiarCarro) {
+                Text("Cambiar de carro", color = Neon.TextMuted, fontSize = 13.sp)
             }
         }
     )

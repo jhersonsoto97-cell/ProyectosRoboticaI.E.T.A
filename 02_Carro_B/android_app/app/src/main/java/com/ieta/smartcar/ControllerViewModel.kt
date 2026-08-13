@@ -8,6 +8,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ieta.smartcar.carro.Carro
+import com.ieta.smartcar.carro.Garaje
 import com.ieta.smartcar.control.DriveMixer
 import com.ieta.smartcar.control.DriveMode
 import com.ieta.smartcar.control.DriveTuning
@@ -22,7 +24,6 @@ import com.ieta.smartcar.link.SppClient
 import com.ieta.smartcar.link.TcpClient
 import com.ieta.smartcar.protocolo.OrdenCarro
 import com.ieta.smartcar.protocolo.Protocolo
-import com.ieta.smartcar.protocolo.ProtocoloMega
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -49,14 +50,35 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     /** Medio por el que viajan las tramas. */
     var link: CarLink by mutableStateOf(spp); private set
 
+    /** Carro elegido en el garaje. De el salen el idioma y lo que la interfaz muestra. */
+    var carro: Carro by mutableStateOf(Garaje.CARRO_B); private set
+
     /**
-     * Idioma del carro conectado.
+     * Idioma del carro, derivado y no guardado aparte.
      *
      * Separado del transporte a proposito: el medio y el formato no tienen por que ir
      * de la mano. El simulador del PC habla el idioma del Mega sobre TCP, y el mismo
      * idioma viaja igual por BLE.
      */
-    var protocolo: Protocolo by mutableStateOf(ProtocoloMega); private set
+    val protocolo: Protocolo get() = carro.protocolo
+
+    /**
+     * Cambia de carro y corta lo que hubiera abierto.
+     *
+     * Cortar es obligatorio: seguir conectado al carro anterior mientras la interfaz
+     * dice otra cosa termina en tramas de un idioma mandadas a quien habla el otro.
+     */
+    fun elegirCarro(nuevo: Carro) {
+        if (nuevo.nombre != carro.nombre) {
+            connectJob?.cancel()
+            link.disconnect()
+        }
+        carro = nuevo
+        prefs.edit().putString(KEY_ULTIMO_CARRO, nuevo.nombre).apply()
+    }
+
+    val ultimoCarroUsado: Carro?
+        get() = prefs.getString(KEY_ULTIMO_CARRO, null)?.let { Garaje.porNombre(it) }
 
     private var connectJob: Job? = null
 
@@ -314,6 +336,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         const val KEY_STEER_EXPO = "steer_expo"
         const val KEY_STEER_AUTHORITY = "steer_authority"
         const val KEY_STICK_TRAVEL = "stick_travel"
+        const val KEY_ULTIMO_CARRO = "ultimo_carro"
 
         /** Margen antes de descartar un transporte y probar el otro. */
         const val CONNECT_WINDOW_MS = 25_000L
