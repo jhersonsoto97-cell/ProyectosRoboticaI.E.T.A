@@ -19,6 +19,14 @@
     <!-- Solo para el transporte TCP contra el simulador del PC. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+        Para unirse a la red que levanta el carro y, sobre todo, para atar los sockets a
+        ella. Sin CHANGE_NETWORK_STATE el sistema rechaza el pedido de red y el telefono
+        sigue mandando todo por datos moviles aunque figure conectado al carro.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+
     <!-- required=false: el emulador no tiene radio Bluetooth y aun asi debe poder
          instalar la app para probar la interfaz contra el simulador. -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

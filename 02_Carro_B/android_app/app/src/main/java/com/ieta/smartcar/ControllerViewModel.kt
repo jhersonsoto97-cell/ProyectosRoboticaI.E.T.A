@@ -20,8 +20,10 @@ import com.ieta.smartcar.link.CarLink
 import com.ieta.smartcar.link.DeviceScanner
 import com.ieta.smartcar.link.LinkState
 import com.ieta.smartcar.link.Radio
+import com.ieta.smartcar.link.RedWifi
 import com.ieta.smartcar.link.SppClient
 import com.ieta.smartcar.link.TcpClient
+import com.ieta.smartcar.link.WebSocketClient
 import com.ieta.smartcar.protocolo.OrdenCarro
 import com.ieta.smartcar.protocolo.Protocolo
 import kotlinx.coroutines.Job
@@ -46,6 +48,9 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     val spp = SppClient(adapter, viewModelScope)
     val ble = BleClient(application, adapter, viewModelScope)
     val tcp = TcpClient(viewModelScope)
+
+    val redWifi = RedWifi(application)
+    val websocket = WebSocketClient(viewModelScope, redWifi)
 
     /** Medio por el que viajan las tramas. */
     var link: CarLink by mutableStateOf(spp); private set
@@ -247,6 +252,25 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /**
+     * Se une a la red del carro. El resto lo dispara solo al quedar unido.
+     *
+     * No conecta aqui mismo porque el dialogo del sistema puede tardar lo que el usuario
+     * tarde en aceptarlo, y hasta que no acepte no existe la red a la que atar el socket.
+     */
+    fun unirseAlExplorador() {
+        val elegido = carro
+        val red = elegido.red ?: return
+        redWifi.unirse(red, elegido.clave.orEmpty())
+    }
+
+    /** Abre el WebSocket contra el carro. Requiere estar ya en su red. */
+    fun conectarExplorador() {
+        connectJob?.cancel()
+        switchTo(websocket)
+        websocket.connectTo()
+    }
+
     fun connectSimulator(endpoint: String) {
         connectJob?.cancel()
         switchTo(tcp)
@@ -304,6 +328,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     override fun onCleared() {
         super.onCleared()
         scanner.stop()   // deja registrado el BroadcastReceiver si no se cancela
+        redWifi.soltar() // si no, el telefono queda atado a una red sin internet
         connectJob?.cancel()
         link.disconnect()
     }

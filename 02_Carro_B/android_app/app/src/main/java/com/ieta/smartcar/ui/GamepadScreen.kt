@@ -59,6 +59,7 @@ import com.ieta.smartcar.control.DriveMode
 import com.ieta.smartcar.link.BtDevice
 import com.ieta.smartcar.link.LinkState
 import com.ieta.smartcar.link.Radio
+import com.ieta.smartcar.link.RedWifi
 import com.ieta.smartcar.link.TcpClient
 import com.ieta.smartcar.ui.theme.Neon
 
@@ -226,7 +227,27 @@ fun GamepadScreen(
         }
     }
 
-    if (showDevices) {
+    if (showDevices && viewModel.carro.red != null) {
+        // Un carro que levanta su propia red no aparece en ninguna busqueda Bluetooth.
+        // Buscarlo ahi seria esperar para siempre algo que no existe.
+        RedDelCarroDialog(
+            carro = viewModel.carro,
+            estadoRed = viewModel.redWifi.estado.collectAsState().value,
+            detalleRed = viewModel.redWifi.detalle.collectAsState().value,
+            redActual = viewModel.redWifi.redActual(),
+            errorEnlace = if (linkState == LinkState.ERROR) lastError else null,
+            onUnirse = { viewModel.unirseAlExplorador() },
+            onConectar = {
+                viewModel.conectarExplorador()
+                showDevices = false
+            },
+            onCambiarCarro = {
+                showDevices = false
+                onCambiarCarro()
+            },
+            onDismiss = { showDevices = false }
+        )
+    } else if (showDevices) {
         // Al abrir la ventana se busca solo. Obligar a tocar "buscar" es un paso extra
         // que nadie quiere dar cuando lo unico que busca es su carro.
         LaunchedEffect(Unit) { viewModel.startScan() }
@@ -681,6 +702,157 @@ private fun BottomBar(
             diameter = 70.dp,
             onClick = onEmergencyStop
         )
+    }
+}
+
+/**
+ * Conexion a un carro que levanta su propia red.
+ *
+ * Guia paso a paso en vez de presentar un boton de conectar a secas. La union a una red
+ * sin internet es donde todo se rompe en silencio: el telefono figura conectado al carro
+ * y el sistema sigue mandando el trafico por datos moviles, asi que un fallo generico
+ * dejaria buscando el problema en el carro, que esta bien.
+ */
+@Composable
+private fun RedDelCarroDialog(
+    carro: Carro,
+    estadoRed: RedWifi.Estado,
+    detalleRed: String?,
+    redActual: String?,
+    errorEnlace: String?,
+    onUnirse: () -> Unit,
+    onConectar: () -> Unit,
+    onCambiarCarro: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val enSuRed = redActual == carro.red || estadoRed == RedWifi.Estado.UNIDO
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Neon.Surface,
+        titleContentColor = Neon.TextPrimary,
+        textContentColor = Neon.TextMuted,
+        title = {
+            Column {
+                Text("Conectar", fontSize = 16.sp)
+                Text(
+                    text = "${carro.nombre.uppercase()}  ·  ${carro.medio}",
+                    color = Neon.Blue.copy(alpha = 0.9f),
+                    fontSize = 10.sp,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                if (errorEnlace != null) {
+                    Aviso(titulo = "NO SE PUDO CONECTAR", cuerpo = errorEnlace, color = Neon.Danger)
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                SectionLabel("PASO 1  ·  UNIRSE A SU RED")
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(if (enSuRed) Neon.Ok else Neon.TextMuted)
+                    )
+                    Spacer(Modifier.width(9.dp))
+                    Text(
+                        text = if (enSuRed) {
+                            "Estás en ${carro.red}"
+                        } else {
+                            "Red actual: ${redActual ?: "ninguna"}"
+                        },
+                        color = if (enSuRed) Neon.Ok else Neon.TextPrimary,
+                        fontSize = 12.sp
+                    )
+                }
+
+                if (!enSuRed) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Red  ${carro.red}\nClave  ${carro.clave}",
+                        color = Neon.TextMuted,
+                        fontSize = 11.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(
+                        onClick = onUnirse,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (estadoRed == RedWifi.Estado.PIDIENDO) {
+                                "ESPERANDO CONFIRMACION..."
+                            } else {
+                                "UNIRSE DESDE LA APP"
+                            },
+                            color = Neon.Cyan,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                detalleRed?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, color = Neon.Warning, fontSize = 11.sp)
+                }
+
+                Spacer(Modifier.height(10.dp))
+                SectionLabel("PASO 2  ·  ABRIR EL MANDO")
+
+                TextButton(
+                    onClick = onConectar,
+                    enabled = enSuRed,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "CONECTAR AL CARRO",
+                        color = if (enSuRed) Neon.Ok else Neon.TextMuted,
+                        fontSize = 13.sp,
+                        letterSpacing = 1.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Hint("Si avisa que la red no tiene internet, mantené la conexión.")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar", color = Neon.Cyan)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCambiarCarro) {
+                Text("Cambiar de carro", color = Neon.TextMuted, fontSize = 13.sp)
+            }
+        }
+    )
+}
+
+@Composable
+private fun Aviso(titulo: String, cuerpo: String, color: Color) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(color.copy(alpha = 0.10f))
+            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .padding(10.dp)
+    ) {
+        Text(
+            text = titulo,
+            color = color,
+            fontSize = 10.sp,
+            letterSpacing = 1.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(text = cuerpo, color = Neon.TextPrimary, fontSize = 12.sp)
     }
 }
 
