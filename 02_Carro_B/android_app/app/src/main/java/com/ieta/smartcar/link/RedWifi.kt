@@ -1,6 +1,7 @@
 package com.ieta.smartcar.link
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -8,6 +9,7 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,7 +81,32 @@ class RedWifi(private val context: Context) {
     fun unirse(ssid: String, clave: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             _estado.value = Estado.NO_SOPORTADO
-            _detalle.value = "Uni el telefono a la red $ssid desde los ajustes de WiFi."
+            _detalle.value = "Uní el teléfono a la red $ssid desde los ajustes de WiFi."
+            return
+        }
+
+        // Se comprueba antes de pedir. Sin el permiso, el sistema descarta el pedido sin
+        // lanzar nada y sin responder nunca, asi que el boton parece no hacer nada.
+        val permisoWifi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            android.Manifest.permission.NEARBY_WIFI_DEVICES
+        } else {
+            android.Manifest.permission.ACCESS_FINE_LOCATION
+        }
+
+        if (ContextCompat.checkSelfPermission(context, permisoWifi) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            _estado.value = Estado.RECHAZADO
+            _detalle.value = "Falta el permiso de dispositivos cercanos. Dáselo a la app " +
+                "desde los ajustes del teléfono, o unite a $ssid a mano desde el WiFi."
+            return
+        }
+
+        val wifi = context.applicationContext
+            .getSystemService(Context.WIFI_SERVICE) as? WifiManager
+        if (wifi?.isWifiEnabled == false) {
+            _estado.value = Estado.RECHAZADO
+            _detalle.value = "El WiFi del teléfono está apagado."
             return
         }
 
@@ -108,7 +135,8 @@ class RedWifi(private val context: Context) {
             override fun onUnavailable() {
                 red = null
                 _estado.value = Estado.RECHAZADO
-                _detalle.value = "No apareció $ssid. Verificá que el carro esté encendido."
+                _detalle.value = "No se pudo unir a $ssid. Puede que el carro esté " +
+                    "apagado, o que se haya rechazado el aviso del sistema."
             }
 
             override fun onLost(network: Network) {
@@ -124,7 +152,10 @@ class RedWifi(private val context: Context) {
         _estado.value = Estado.PIDIENDO
         _detalle.value = null
 
-        runCatching { gestor.requestNetwork(pedido, nuevo) }
+        // Con plazo y no sin el. Sin plazo, el sistema no garantiza llamar a
+        // onUnavailable, asi que un pedido que nunca se cumple deja la pantalla
+        // esperando para siempre sin decir por que.
+        runCatching { gestor.requestNetwork(pedido, nuevo, PLAZO_MS) }
             .onFailure {
                 _estado.value = Estado.RECHAZADO
                 _detalle.value = it.message ?: "No se pudo pedir la red"
@@ -134,12 +165,43 @@ class RedWifi(private val context: Context) {
     /**
      * Ata un socket a la red del carro.
      *
-     * Es la linea sin la cual todo lo demas no sirve. Si no hay red pedida por la app,
-     * no hace nada y deja que el socket salga por donde el sistema decida: eso cubre el
-     * caso de quien se unio a mano desde los ajustes.
+     * Es la linea sin la cual todo lo demas no sirve.
+     *
+     * Si la app no pidio la red, se busca la WiFi que el sistema ya tenga levantada. Ese
+     * camino es el unico posible en Android 9 y anteriores, donde no existe forma de
+     * pedir una red desde la app, y es tambien el de quien se unio a mano desde los
+     * ajustes, que es lo que la mayoria hace la primera vez.
+     *
+     * Sin esta busqueda, en esos telefonos el socket salia por donde el sistema quisiera
+     * y el atado, que es la razon de ser de esta clase, no ocurria nunca.
      */
     fun atar(socket: Socket) {
-        red?.bindSocket(socket)
+        (red ?: redWifiDelSistema())?.let { runCatching { it.bindSocket(socket) } }
+    }
+
+    /** La WiFi que el telefono ya tiene levantada, la haya pedido la app o no. */
+    private fun redWifiDelSistema(): Network? {
+        @Suppress("DEPRECATION")
+        val disponibles = gestor.allNetworks
+        return disponibles.firstOrNull { candidata ->
+            gestor.getNetworkCapabilities(candidata)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        }
+    }
+
+    /**
+     * Si este telefono puede unirse a una red desde la app.
+     *
+     * Antes de Android 10 no existe la API, asi que la union es siempre a mano y no
+     * tiene sentido ofrecer un boton que no puede funcionar.
+     */
+    val puedeUnirseSolo: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+
+    private companion object {
+        /* Un minuto: el aviso del sistema aparece al instante, pero quien lo lee por
+         * primera vez se toma su tiempo antes de aceptarlo. */
+        const val PLAZO_MS = 60_000
     }
 
     /** Suelta la red para que el telefono vuelva a sus datos moviles. */

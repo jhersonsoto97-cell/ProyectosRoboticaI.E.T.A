@@ -40,14 +40,24 @@ class MainActivity : ComponentActivity() {
     // el descubrimiento se apoyaba en el permiso de ubicacion, porque la lista de
     // dispositivos cercanos permite deducir donde esta el usuario.
     private val requiredPermissions: Array<String>
-        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.BLUETOOTH_SCAN
-            )
-        } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        get() = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+                add(Manifest.permission.BLUETOOTH_SCAN)
+            } else {
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+
+            // Unirse a la red que levanta un carro necesita su propio permiso, y cual
+            // depende de la version: hasta Android 12 es el de ubicacion, porque las
+            // redes cercanas delatan donde esta el usuario; desde Android 13 hay uno
+            // dedicado que no arrastra la ubicacion consigo.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.NEARBY_WIFI_DEVICES)
+            } else {
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+        }.distinct().toTypedArray()
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }

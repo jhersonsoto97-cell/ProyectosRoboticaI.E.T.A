@@ -11,10 +11,24 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <!-- Hasta Android 11 el descubrimiento Bluetooth exige permiso de ubicacion, porque
-         la lista de dispositivos cercanos permite inferir donde esta el usuario. -->
+         la lista de dispositivos cercanos permite inferir donde esta el usuario.
+
+         El tope llega hasta la 32 y no hasta la 30 por el WiFi: unirse a la red de un
+         carro con WifiNetworkSpecifier tambien pide ubicacion en Android 10, 11 y 12,
+         por el mismo motivo. Desde la 13 ese permiso lo reemplaza NEARBY_WIFI_DEVICES. -->
     <uses-permission
         android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
+        android:maxSdkVersion="32" />
+
+    <!-- Android 13 y superiores. Sin este permiso el sistema descarta en silencio el
+         pedido de unirse a la red del carro: no lanza excepcion, simplemente nunca
+         responde, que es exactamente como se veia el problema desde afuera.
+
+         neverForLocation deja explicito que la app no deduce ubicacion a partir de las
+         redes cercanas, y asi el sistema no exige ademas el permiso de ubicacion. -->
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
 
     <!-- Solo para el transporte TCP contra el simulador del PC. -->
     <uses-permission android:name="android.permission.INTERNET" />

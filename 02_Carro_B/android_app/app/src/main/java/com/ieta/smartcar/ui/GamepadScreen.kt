@@ -84,6 +84,8 @@ fun GamepadScreen(
     val scanning by viewModel.scanner.scanning.collectAsState()
     val scanError by viewModel.scanner.lastError.collectAsState()
 
+    val contexto = LocalContext.current
+
     var showDevices by remember { mutableStateOf(false) }
     var showCalibration by remember { mutableStateOf(false) }
     var showSocial by remember { mutableStateOf(false) }
@@ -284,6 +286,8 @@ fun GamepadScreen(
             estadoRed = viewModel.redWifi.estado.collectAsState().value,
             detalleRed = viewModel.redWifi.detalle.collectAsState().value,
             redActual = viewModel.redWifi.redActual(),
+            puedeUnirseSolo = viewModel.redWifi.puedeUnirseSolo,
+            onAbrirAjustesWifi = { abrirAjustesWifi(contexto) },
             errorEnlace = if (linkState == LinkState.ERROR) lastError else null,
             onUnirse = { viewModel.unirseAlExplorador() },
             onConectar = {
@@ -851,6 +855,8 @@ private fun RedDelCarroDialog(
     estadoRed: RedWifi.Estado,
     detalleRed: String?,
     redActual: String?,
+    puedeUnirseSolo: Boolean,
+    onAbrirAjustesWifi: () -> Unit,
     errorEnlace: String?,
     onUnirse: () -> Unit,
     onConectar: () -> Unit,
@@ -912,25 +918,47 @@ private fun RedDelCarroDialog(
                         fontSize = 11.sp
                     )
                     Spacer(Modifier.height(6.dp))
-                    TextButton(
-                        onClick = onUnirse,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
+
+                    // Antes de Android 10 no existe forma de que la app una el telefono
+                    // a una red. Ofrecer igual ese boton seria prometer algo que no
+                    // puede cumplir, asi que se lo lleva derecho a los ajustes.
+                    if (puedeUnirseSolo) {
+                        TextButton(
+                            onClick = onUnirse,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = if (estadoRed == RedWifi.Estado.PIDIENDO) {
+                                    "ESPERANDO CONFIRMACION..."
+                                } else {
+                                    "UNIRSE DESDE LA APP"
+                                },
+                                color = Neon.Cyan,
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else {
+                        TextButton(
+                            onClick = onAbrirAjustesWifi,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("ABRIR AJUSTES DE WIFI", color = Neon.Cyan, fontSize = 12.sp)
+                        }
                         Text(
-                            text = if (estadoRed == RedWifi.Estado.PIDIENDO) {
-                                "ESPERANDO CONFIRMACION..."
-                            } else {
-                                "UNIRSE DESDE LA APP"
-                            },
-                            color = Neon.Cyan,
-                            fontSize = 12.sp
+                            text = "Este Android no deja que la app se una sola. " +
+                                "Unite a ${carro.red} y volvé acá.",
+                            color = Neon.TextMuted,
+                            fontSize = 10.sp
                         )
                     }
                 }
 
+                // El aviso va aqui y no al final: en landscape el dialogo scrollea, y al
+                // final quedaba fuera de la pantalla. Un mensaje que nadie ve equivale a
+                // no haberlo escrito, y fue exactamente lo que paso.
                 detalleRed?.let {
-                    Spacer(Modifier.height(6.dp))
-                    Text(it, color = Neon.Warning, fontSize = 11.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Aviso(titulo = "AVISO", cuerpo = it, color = Neon.Warning)
                 }
 
                 Spacer(Modifier.height(10.dp))
@@ -1248,6 +1276,21 @@ private fun SectionLabel(text: String) {
 /* Cuentas del autor. Si alguna cambia, se cambia aqui y en ningun otro lado. */
 private const val URL_INSTAGRAM = "https://www.instagram.com/jeison.cstml_"
 private const val URL_GITHUB = "https://github.com/DENCODE31"
+
+/**
+ * Abre la pantalla de WiFi del sistema.
+ *
+ * Es la unica via en telefonos anteriores a Android 10, y ahorra explicar con palabras
+ * un recorrido por los ajustes que cambia de marca en marca.
+ */
+private fun abrirAjustesWifi(contexto: android.content.Context) {
+    runCatching {
+        contexto.startActivity(
+            Intent(android.provider.Settings.ACTION_WIFI_SETTINGS)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+}
 
 private fun radioLabel(radio: Radio): String? = when (radio) {
     Radio.LE -> "BLE"
