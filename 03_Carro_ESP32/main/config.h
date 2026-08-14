@@ -117,11 +117,41 @@
  * reales, y forzarlos hace que el servo trabaje contra el tope. */
 #define ANGULO_MIN         10
 #define ANGULO_MAX         170
-#define PASO_GRADOS        3
+
+/* El cono del HC-SR04 abre unos 15 grados, asi que pasos mas finos que eso miden
+ * una y otra vez el mismo volumen de aire. Con 3 grados el barrido daba cinco
+ * lecturas superpuestas del mismo cono y tardaba el triple sin ver nada nuevo. */
+#define PASO_GRADOS        5
 
 /* Tiempo que se le da al servo para llegar antes de medir. Medir mientras
  * todavia se mueve reparte la lectura sobre varios angulos. */
 #define ASENTAR_MS         18
+
+/* ------------------------------------------------------------
+ *   Confiabilidad de las lecturas
+ * ------------------------------------------------------------ */
+/* Tiempo minimo entre el arranque de dos mediciones.
+ *
+ * El sensor sigue oyendo su propia rafaga despues de contestar. Disparando antes
+ * de que se apague, el eco que vuelve puede ser el del disparo anterior rebotando
+ * en algo lejano, y aparece como un obstaculo cercano que no existe.
+ *
+ * La hoja de datos pide 60 ms para el alcance maximo. Se usan 45 porque el tiempo
+ * que el servo tarda en asentarse ya cuenta dentro de este plazo. */
+#define REARME_MS          45
+
+/* Diferencia contra la lectura vecina que obliga a medir de nuevo antes de
+ * publicar. Un obstaculo real no aparece y desaparece entre dos angulos
+ * contiguos, pero un ping perdido si. */
+#define SALTO_SOSPECHOSO_CM 40.0f
+
+/* Muestras por angulo durante el escaneo. Se toma la mediana, que descarta una
+ * lectura mala sin promediarla con las buenas: promediando, un cero espurio
+ * arrastraria la distancia hacia el carro.
+ *
+ * Solo en el escaneo. En el barrido en vivo triplicaria el tiempo de refresco, y
+ * ahi lo que importa es que el radar siga al servo. */
+#define MUESTRAS_ESCANEO   3
 
 #define ALCANCE_MAX_CM     250.0f
 #define ALCANCE_MIN_CM     3.0f

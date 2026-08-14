@@ -8,6 +8,7 @@
 #include "esp_timer.h"
 #include "esp_rom_sys.h"
 #include "esp_log.h"
+#include <math.h>
 
 static const char *TAG_SONAR = "sonar";
 
@@ -28,6 +29,9 @@ static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 static volatile bool barriendo = true;
 static volatile bool en_escaneo = false;
 static volatile int progreso = 0;
+
+/* Cuando arranco la ultima medicion, para no disparar antes de tiempo. */
+static int64_t marca_ultima_medicion = 0;
 
 static sonar_lectura_t puntos[MAX_PUNTOS];
 static int cantidad_puntos = 0;
@@ -90,9 +94,27 @@ typedef enum {
     ECO_FUERA_DE_RANGO,   /* pulso medido, pero fuera de los limites utiles */
 } eco_estado_t;
 
+/**
+ * Espera lo que falte para que el sensor este listo para otro disparo.
+ *
+ * Descuenta el tiempo ya transcurrido desde la medicion anterior, de modo que lo
+ * que el servo tardo en asentarse cuenta dentro del plazo en vez de sumarse.
+ */
+static void esperar_rearme(void) {
+    const int64_t transcurrido = esp_timer_get_time() - marca_ultima_medicion;
+    const int64_t falta_us = (int64_t)REARME_MS * 1000 - transcurrido;
+
+    if (falta_us > 0) {
+        vTaskDelay(pdMS_TO_TICKS((falta_us / 1000) + 1));
+    }
+    marca_ultima_medicion = esp_timer_get_time();
+}
+
 static eco_estado_t medir_detallado(int64_t *ancho_us, float *cm) {
     *ancho_us = 0;
     *cm = -1.0f;
+
+    esperar_rearme();
 
     gpio_set_level(PIN_SONAR_TRIG, 0);
     esp_rom_delay_us(3);
@@ -164,18 +186,80 @@ static float medir_en(int angulo) {
     return medir_cm();
 }
 
+/**
+ * Mide y, si el valor se aleja demasiado del vecino, pide una segunda opinion.
+ *
+ * Un obstaculo real no aparece y desaparece entre dos angulos contiguos: el cono
+ * del sensor es mas ancho que el paso, asi que dos lecturas seguidas ven casi el
+ * mismo volumen. Un salto grande es casi siempre un ping perdido o un rebote
+ * ajeno, y publicarlo pinta un obstaculo donde no hay nada.
+ *
+ * Se remide solo cuando hay sospecha. Hacerlo siempre duplicaria el tiempo de
+ * barrido para corregir algo que pasa pocas veces.
+ */
+static float medir_confirmado(int angulo, float vecina) {
+    const float cm = medir_en(angulo);
+
+    const bool sospechosa = (vecina > 0.0f) &&
+                            (fabsf(cm - vecina) > SALTO_SOSPECHOSO_CM);
+    if (!sospechosa) {
+        return cm;
+    }
+
+    /* El servo ya esta en posicion; solo hace falta disparar de nuevo. */
+    return medir_cm();
+}
+
+/**
+ * Mediana de varias muestras en un mismo angulo.
+ *
+ * Mediana y no promedio: una lectura mala se descarta entera en vez de arrastrar
+ * el resultado. Promediando, un solo cero espurio acerca el obstaculo al carro.
+ *
+ * Las lecturas sin eco valen -1 y entran al orden como las demas, asi que si la
+ * mayoria no tuvo eco el resultado tambien es "sin eco", que es la verdad.
+ */
+static float medir_mediana(int angulo) {
+    servo_escribir(angulo);
+    vTaskDelay(pdMS_TO_TICKS(ASENTAR_MS));
+
+    float muestras[MUESTRAS_ESCANEO];
+    for (int i = 0; i < MUESTRAS_ESCANEO; ++i) {
+        muestras[i] = medir_cm();
+    }
+
+    /* Insercion: con tres o cinco elementos cualquier algoritmo mas elaborado
+     * cuesta mas lineas que las que ahorra. */
+    for (int i = 1; i < MUESTRAS_ESCANEO; ++i) {
+        const float valor = muestras[i];
+        int j = i - 1;
+        while (j >= 0 && muestras[j] > valor) {
+            muestras[j + 1] = muestras[j];
+            --j;
+        }
+        muestras[j + 1] = valor;
+    }
+
+    return muestras[MUESTRAS_ESCANEO / 2];
+}
+
 static void tarea_barrido(void *arg) {
     (void)arg;
     int angulo = ajustes()->angulo_min;
     int paso = PASO_GRADOS;
+    float anterior = -1.0f;
 
     for (;;) {
         if (!barriendo) {
             vTaskDelay(pdMS_TO_TICKS(20));
+            /* Al reanudar, la lectura de hace rato no sirve como vecina: el carro
+             * pudo haberse movido y comparar contra ella marcaria todo sospechoso. */
+            anterior = -1.0f;
             continue;
         }
 
-        const float cm = medir_en(angulo);
+        const float cm = medir_confirmado(angulo, anterior);
+        anterior = cm;
         publicar(angulo, cm);
 
         angulo += paso;
@@ -295,7 +379,7 @@ int sonar_ejecutar_escaneo(void) {
             if (cantidad_puntos >= MAX_PUNTOS) {
                 break;
             }
-            const float cm = medir_en(a);
+            const float cm = medir_mediana(a);
 
             /* Mismo marco que las lecturas vivas: 0 es el frente inicial. */
             puntos[cantidad_puntos].angulo = (int16_t)(offset + a_grados_carro(a));
