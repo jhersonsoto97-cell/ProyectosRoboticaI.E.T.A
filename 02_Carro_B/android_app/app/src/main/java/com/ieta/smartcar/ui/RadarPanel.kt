@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ieta.smartcar.protocolo.EcoRadar
 import com.ieta.smartcar.ui.theme.Neon
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -54,20 +56,30 @@ import kotlin.math.sin
  */
 @Composable
 fun RadarPanel(
-    ecos: Map<Int, Float>,
+    ecos: Map<Int, EcoRadar>,
     anguloActual: Int?,
     conectado: Boolean,
     progresoEscaneo: Int,
     alcanceCm: Int,
     onAlcance: (Int) -> Unit,
+    servoCentrado: Boolean,
+    onCentrar: () -> Unit,
     modifier: Modifier = Modifier,
     ancho: Dp = 190.dp,
 ) {
     val medidor = rememberTextMeasurer()
-    val anchoLamina = ancho - ANCHO_SLIDER - 8.dp
+    val anchoLamina = ancho - ANCHO_SLIDER - ANCHO_BOTON - 16.dp
     val paso = pasoDeAnillo(alcanceCm)
 
     Row(modifier = modifier.width(ancho)) {
+        BotonCentrar(
+            activo = servoCentrado,
+            onClick = onCentrar,
+            alto = anchoLamina * 0.62f
+        )
+
+        Spacer(Modifier.width(8.dp))
+
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
@@ -89,7 +101,7 @@ fun RadarPanel(
                     val radio = size.height * 0.80f
 
                     dibujarRejilla(origen, radio, alcanceCm, paso, medidor)
-                    dibujarEcos(ecos, origen, radio, alcanceCm.toFloat())
+                    dibujarEcos(ecos, origen, radio, alcanceCm.toFloat(), System.currentTimeMillis())
                     anguloActual?.let { dibujarAguja(it, origen, radio) }
 
                     drawCircle(color = Neon.Cyan, radius = 3.dp.toPx(), center = origen)
@@ -128,7 +140,7 @@ fun RadarPanel(
                     text = when {
                         progresoEscaneo < 100 -> "ESCANEANDO $progresoEscaneo%"
                         ecos.isEmpty() -> "SIN ECOS"
-                        else -> "${ecos.values.minOrNull()?.toInt() ?: 0} CM"
+                        else -> "${ecos.values.minOfOrNull { it.distanciaCm }?.toInt() ?: 0} CM"
                     },
                     color = if (progresoEscaneo < 100) Neon.Warning else Neon.Cyan,
                     fontSize = 8.sp,
@@ -144,6 +156,73 @@ fun RadarPanel(
             alcanceCm = alcanceCm,
             onAlcance = onAlcance,
             alto = anchoLamina * 0.62f
+        )
+    }
+}
+
+/**
+ * Sostiene el brazo del sonar en el centro para poder montarlo.
+ *
+ * El sensor no va atornillado al brazo, asi que hay que pegarlo mirando al frente. Con
+ * el servo barriendo eso es imposible de acertar, y dejarlo sin senal tampoco sirve
+ * porque el brazo cede ante su propio peso.
+ *
+ * Queda al lado del radar y no en la fila de abajo porque se usa con el carro en la
+ * mano y el radar a la vista: mientras se pega el sensor, la aguja muestra hacia donde
+ * esta mirando de verdad.
+ */
+@Composable
+private fun BotonCentrar(
+    activo: Boolean,
+    onClick: () -> Unit,
+    alto: Dp,
+) {
+    val acento = if (activo) Neon.Ok else Neon.TextMuted
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier.width(ANCHO_BOTON).height(alto)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(ANCHO_BOTON)
+                .clip(RoundedCornerShape(10.dp))
+                .background(
+                    if (activo) Neon.Ok.copy(alpha = 0.16f) else Neon.Surface
+                )
+                .border(
+                    1.dp,
+                    if (activo) Neon.Ok else Neon.Outline,
+                    RoundedCornerShape(10.dp)
+                )
+                .pointerInput(Unit) { detectTapGestures { onClick() } },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.size(ANCHO_BOTON * 0.55f)) {
+                /* Una mira: dos ejes y un circulo. Dice "esto apunta al frente" sin
+                 * necesidad de una palabra que no cabe a este ancho. */
+                val medio = size.width / 2f
+                val trazo = size.width * 0.09f
+
+                drawLine(acento, Offset(medio, 0f), Offset(medio, size.height), trazo)
+                drawLine(acento, Offset(0f, medio), Offset(size.width, medio), trazo)
+                drawCircle(
+                    color = acento,
+                    radius = size.width * 0.30f,
+                    style = Stroke(width = trazo)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(5.dp))
+
+        Text(
+            text = if (activo) "FIJO" else "CENTRO",
+            color = acento,
+            fontSize = 7.sp,
+            letterSpacing = 0.5.sp,
+            fontWeight = FontWeight.Bold
         )
     }
 }
@@ -313,12 +392,19 @@ private fun DrawScope.dibujarRejilla(
 }
 
 private fun DrawScope.dibujarEcos(
-    ecos: Map<Int, Float>,
+    ecos: Map<Int, EcoRadar>,
     origen: Offset,
     radio: Float,
     alcanceCm: Float,
+    ahora: Long,
 ) {
-    for ((grados, distancia) in ecos) {
+    for ((grados, eco) in ecos) {
+        val distancia = eco.distanciaCm
+
+        /* La frescura decide cuanto se ve. Un eco recien medido va lleno y uno de hace
+         * dos pasadas queda como un rastro tenue, que es lo que separa lo que el sonar
+         * esta viendo ahora de lo que vio hace rato y quiza ya no este. */
+        val frescura = (1f - (ahora - eco.instante) / VIDA_ECO_MS).coerceIn(0.15f, 1f)
         /* Lo que queda mas alla del alcance elegido no se dibuja pegado al borde: eso
          * inventaria una pared donde solo hay algo lejos. Simplemente no se muestra. */
         if (distancia > alcanceCm) continue
@@ -338,8 +424,8 @@ private fun DrawScope.dibujarEcos(
             else -> Neon.Cyan
         }
 
-        drawCircle(color = color.copy(alpha = 0.25f), radius = 5f, center = punto)
-        drawCircle(color = color, radius = 2.5f, center = punto)
+        drawCircle(color = color.copy(alpha = 0.25f * frescura), radius = 5f, center = punto)
+        drawCircle(color = color.copy(alpha = frescura), radius = 2.5f, center = punto)
     }
 }
 
@@ -364,12 +450,16 @@ private fun DrawScope.dibujarAguja(grados: Int, origen: Offset, radio: Float) {
 }
 
 private val ANCHO_SLIDER = 26.dp
+private val ANCHO_BOTON = 34.dp
 
 /** Alcance util del HC-SR04, el mismo que declara el firmware. */
 private const val ALCANCE_MAX = 250f
 
 /** Por debajo de esto el sensor no mide: su propio transductor sigue vibrando. */
 private const val ALCANCE_MIN = 30f
+
+/** Lo mismo que descarta el ViewModel, para que el desvanecido termine justo al irse. */
+private const val VIDA_ECO_MS = 3000f
 
 /** Separaciones que una persona puede sumar de cabeza. */
 private val PASOS = listOf(10, 20, 25, 50, 100)

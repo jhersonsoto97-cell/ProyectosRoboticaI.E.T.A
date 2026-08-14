@@ -98,6 +98,13 @@ static void manejar_mensaje(const char *texto) {
 
     if (tiene_tipo(texto, "stop")) {
         drive_detener();
+        return;
+    }
+
+    if (tiene_tipo(texto, "centrar")) {
+        int activo = 0;
+        leer_entero(texto, "v", &activo);
+        sonar_centrar(activo != 0);
     }
 }
 

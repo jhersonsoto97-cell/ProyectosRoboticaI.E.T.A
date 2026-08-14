@@ -18,6 +18,7 @@ object ProtocoloMega : Protocolo {
 
         /* Este carro no tiene sonar. */
         OrdenCarro.Escanear -> null
+        is OrdenCarro.CentrarServo -> null
     }
 
     /* El Mega manda lineas de texto pensadas para que las lea una persona, no un

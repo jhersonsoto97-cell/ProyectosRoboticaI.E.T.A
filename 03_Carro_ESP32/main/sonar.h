@@ -50,6 +50,18 @@ int sonar_cantidad_puntos(void);
 /** True mientras un escaneo esta en curso; el mando queda inhibido. */
 bool sonar_escaneando(void);
 
+/**
+ * Detiene el barrido y sostiene el servo en el centro de su recorrido.
+ *
+ * Existe para montar el brazo: el sensor no va atornillado, asi que hay que pegarlo
+ * mirando al frente, y con el servo barriendo eso es imposible de acertar. Se sostiene
+ * en vez de moverse una vez porque un servo sin senal cede ante el peso del brazo.
+ */
+void sonar_centrar(bool activo);
+
+/** True mientras el brazo se mantiene quieto en el centro. */
+bool sonar_centrado(void);
+
 /** Progreso del escaneo en curso, de 0 a 100. */
 int sonar_progreso(void);
 

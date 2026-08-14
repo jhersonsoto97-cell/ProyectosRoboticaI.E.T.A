@@ -19,6 +19,8 @@ object ProtocoloEsp32 : Protocolo {
             """{"t":"c","l":${orden.izquierda},"r":${orden.derecha}}"""
         OrdenCarro.Detener -> """{"t":"stop"}"""
         OrdenCarro.Escanear -> """{"t":"scan"}"""
+        is OrdenCarro.CentrarServo ->
+            """{"t":"centrar","v":${if (orden.activo) 1 else 0}}"""
 
         /* La compensacion de reversa la resuelve este carro con sus propios trims,
          * guardados en su memoria y ajustables desde su panel. */

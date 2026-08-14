@@ -19,11 +19,22 @@ sealed interface OrdenCarro {
     data class TrimReversa(val izquierda: Int, val derecha: Int) : OrdenCarro
     data object Detener : OrdenCarro
     data object Escanear : OrdenCarro
+
+    /** Sostener el brazo del sonar en el centro para poder montarlo. */
+    data class CentrarServo(val activo: Boolean) : OrdenCarro
     data object Autoprueba : OrdenCarro
 }
 
 /** Un eco del sonar, en el marco del carro: 0 grados es al frente. */
 data class PuntoSonar(val angulo: Int, val distanciaCm: Float)
+
+/**
+ * Un eco ya en pantalla, con el instante en que llego.
+ *
+ * La edad decide cuanto se ve y cuando desaparece. Sin ella, un punto medido antes de
+ * que el carro girara sigue dibujado como si el obstaculo siguiera ahi.
+ */
+data class EcoRadar(val distanciaCm: Float, val instante: Long)
 
 /** Lo que el carro cuenta de vuelta, ya interpretado. */
 sealed interface EventoCarro {

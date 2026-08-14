@@ -25,6 +25,7 @@ import com.ieta.smartcar.link.RedWifi
 import com.ieta.smartcar.link.SppClient
 import com.ieta.smartcar.link.TcpClient
 import com.ieta.smartcar.link.WebSocketClient
+import com.ieta.smartcar.protocolo.EcoRadar
 import com.ieta.smartcar.protocolo.EventoCarro
 import com.ieta.smartcar.protocolo.OrdenCarro
 import com.ieta.smartcar.protocolo.Protocolo
@@ -90,14 +91,29 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     private var connectJob: Job? = null
     private var telemetriaJob: Job? = null
 
-    /** Ultima distancia medida en cada direccion, en centimetros. */
-    val ecos = mutableStateMapOf<Int, Float>()
+    /**
+     * Ultima medida de cada direccion, con el instante en que llego.
+     *
+     * La marca de tiempo no es un detalle: un eco de hace cinco segundos puede haberse
+     * medido antes de que el carro girara, y dibujarlo como si siguiera ahi es inventar
+     * un obstaculo. Guardandolos sin fecha, la pantalla acumulaba puntos viejos que se
+     * veian exactamente igual que lecturas falsas.
+     */
+    val ecos = mutableStateMapOf<Int, EcoRadar>()
 
     /** Hacia donde apunta el sonar ahora mismo, o null si no hay lecturas. */
     var anguloSonar by mutableStateOf<Int?>(null); private set
 
     /** Avance del escaneo en curso, de 0 a 100. En 100 el plano ya llego. */
     var progresoEscaneo by mutableStateOf(100); private set
+
+    /** True mientras el brazo del sonar se sostiene en el centro para poder montarlo. */
+    var servoCentrado by mutableStateOf(false); private set
+
+    fun alternarCentradoServo() {
+        servoCentrado = !servoCentrado
+        ultimoCentradoEnviado = 0L   // que salga en el proximo tick, no dentro de un segundo
+    }
 
 
     var leftStickX by mutableStateOf(0f); private set
@@ -120,6 +136,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         private set
 
     private var lastTrimSent = 0L
+    private var ultimoCentradoEnviado = 0L
 
     // Sensibilidad del mando, en porcentaje para poder mostrarla y ajustarla con enteros.
     // A diferencia del trim, no viaja al carro: se aplica aqui, sobre la posicion del
@@ -335,20 +352,33 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         for (evento in protocolo.decodificar(entrante)) {
             when (evento) {
                 is EventoCarro.Lectura -> {
+                    val ahora = System.currentTimeMillis()
                     anguloSonar = evento.punto.angulo
+
                     if (evento.punto.distanciaCm > 0f) {
-                        ecos[evento.punto.angulo] = evento.punto.distanciaCm
+                        ecos[evento.punto.angulo] =
+                            EcoRadar(evento.punto.distanciaCm, ahora)
                     } else {
                         // Sin eco tambien es informacion: ahi no hay nada, y dejar el
                         // punto viejo dibujado inventaria un obstaculo que ya no esta.
                         ecos.remove(evento.punto.angulo)
                     }
+
+                    // Los que el barrido no volvio a confirmar se caen solos. Un angulo
+                    // deja de refrescarse cuando el servo cambia de recorrido o cuando
+                    // el carro giro, y en los dos casos lo que habia ahi ya no es cierto.
+                    ecos.entries.removeAll { ahora - it.value.instante > VIDA_ECO_MS }
                 }
 
                 is EventoCarro.Plano -> {
+                    // El plano llega completo y de una sola vez: reemplaza todo en vez de
+                    // mezclarse con lecturas sueltas de antes del escaneo.
+                    val ahora = System.currentTimeMillis()
                     ecos.clear()
                     for (punto in evento.puntos) {
-                        if (punto.distanciaCm > 0f) ecos[punto.angulo] = punto.distanciaCm
+                        if (punto.distanciaCm > 0f) {
+                            ecos[punto.angulo] = EcoRadar(punto.distanciaCm, ahora)
+                        }
                     }
                 }
 
@@ -399,6 +429,19 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
+        // El centrado se reenvia igual que la calibracion, en su propio tick. El canal de
+        // escritura es CONFLATED, asi que una orden mandada una sola vez puede quedar
+        // pisada por la trama de conduccion siguiente y perderse sin que nadie se entere.
+        // Repitiendola, tambien se recupera sola si el carro se reinicia.
+        if (ahora - ultimoCentradoEnviado >= CENTRADO_PERIOD_MS) {
+            val centrado = protocolo.codificar(OrdenCarro.CentrarServo(servoCentrado))
+            if (centrado != null) {
+                ultimoCentradoEnviado = ahora
+                link.send(centrado)
+                return
+            }
+        }
+
         protocolo.codificar(OrdenCarro.Conducir(power.left, power.right))?.let { link.send(it) }
     }
 
@@ -416,6 +459,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         val SPEED_CAPS = floatArrayOf(0.4f, 0.7f, 1.0f)
 
         const val TRIM_PERIOD_MS = 1000L
+        const val CENTRADO_PERIOD_MS = 1000L
         const val DEFAULT_TRIM = 100
 
         /** Debajo de 25 el techo cae al piso de torque y el acelerador deja de actuar. */
@@ -440,6 +484,12 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         const val KEY_STICK_TRAVEL = "stick_travel"
         const val KEY_ULTIMO_CARRO = "ultimo_carro"
         const val KEY_ALCANCE_RADAR = "alcance_radar"
+
+        /** Cuanto vive un eco sin que el barrido lo confirme.
+         *
+         *  Tres segundos son dos pasadas completas del servo: si en dos
+         *  vueltas nadie volvio a ver ese obstaculo, no estaba. */
+        const val VIDA_ECO_MS = 3000L
 
         /** Un metro y medio: alcanza para ver una pared de frente sin
          *  aplastar contra el centro lo que hay cerca. */

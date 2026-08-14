@@ -27,6 +27,7 @@ static volatile bool hay_nueva = false;
 static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
 static volatile bool barriendo = true;
+static volatile bool centrado = false;
 static volatile bool en_escaneo = false;
 static volatile int progreso = 0;
 
@@ -198,16 +199,32 @@ static float medir_en(int angulo) {
  * barrido para corregir algo que pasa pocas veces.
  */
 static float medir_confirmado(int angulo, float vecina) {
-    const float cm = medir_en(angulo);
+    const float primera = medir_en(angulo);
 
     const bool sospechosa = (vecina > 0.0f) &&
-                            (fabsf(cm - vecina) > SALTO_SOSPECHOSO_CM);
+                            (fabsf(primera - vecina) > SALTO_SOSPECHOSO_CM);
     if (!sospechosa) {
-        return cm;
+        return primera;
     }
 
-    /* El servo ya esta en posicion; solo hace falta disparar de nuevo. */
-    return medir_cm();
+    /* El servo ya esta en posicion; solo hace falta volver a disparar.
+     *
+     * Se toma la mediana de tres y no la segunda lectura a secas: quedandose con
+     * la segunda, un fallo en esa la publicaba igual y el filtro no servia de
+     * nada. Con tres, hacen falta dos lecturas malas seguidas para que pase una,
+     * y si el salto era real las tres coinciden y el borde se respeta. */
+    float tres[3] = { primera, medir_cm(), medir_cm() };
+
+    for (int i = 1; i < 3; ++i) {
+        const float valor = tres[i];
+        int j = i - 1;
+        while (j >= 0 && tres[j] > valor) {
+            tres[j + 1] = tres[j];
+            --j;
+        }
+        tres[j + 1] = valor;
+    }
+    return tres[1];
 }
 
 /**
@@ -251,6 +268,12 @@ static void tarea_barrido(void *arg) {
 
     for (;;) {
         if (!barriendo) {
+            /* El centro lo sostiene esta misma tarea y no quien recibe la orden: es la
+             * unica que mueve el servo, y escribirlo desde otro hilo dejaria a los dos
+             * peleando por la misma salida. */
+            if (centrado) {
+                servo_escribir((ajustes()->angulo_min + ajustes()->angulo_max) / 2);
+            }
             vTaskDelay(pdMS_TO_TICKS(20));
             /* Al reanudar, la lectura de hace rato no sirve como vecina: el carro
              * pudo haberse movido y comparar contra ella marcaria todo sospechoso. */
@@ -401,7 +424,7 @@ int sonar_ejecutar_escaneo(void) {
 
     progreso = 100;
     en_escaneo = false;
-    barriendo = true;
+    barriendo = !centrado;
     return cantidad_puntos;
 }
 
@@ -496,6 +519,13 @@ void sonar_autoprueba(void) {
 
     barriendo = true;
 }
+
+void sonar_centrar(bool activo) {
+    centrado = activo;
+    barriendo = !activo;
+}
+
+bool sonar_centrado(void) { return centrado; }
 
 const sonar_lectura_t *sonar_puntos_escaneo(void) { return puntos; }
 int sonar_cantidad_puntos(void) { return cantidad_puntos; }
