@@ -1,8 +1,9 @@
 package com.ieta.smartcar.alerta
 
 import android.content.Context
-import android.media.AudioManager
-import android.media.ToneGenerator
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.os.Build
 import android.os.SystemClock
 import android.os.VibrationEffect
@@ -32,15 +33,17 @@ class AlertaProximidad(contexto: Context) {
         contexto.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
     }
 
-    /* Un generador de tonos evita empaquetar un archivo de audio y decodificarlo. Para
-     * un pitido corto, traer un sonido propio seria peso y trabajo sin nada a cambio.
+    /* El pitido se sintetiza en vez de usar los tonos del sistema o un archivo.
      *
-     * Va por el canal de musica y no por el de notificaciones. El de notificaciones
-     * queda mudo con el telefono en vibrador, que es justo como lo lleva casi todo el
-     * mundo, y ademas su volumen es un control aparte que nadie toca. El de musica es el
-     * que suben los botones del costado y sigue sonando en vibrador. */
-    private val tonos: ToneGenerator? =
-        runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, VOLUMEN) }.getOrNull()
+     * Los tonos del sistema nacieron para marcar numeros de telefono y ninguno se parece
+     * a un sensor de parqueo. Un archivo de audio daria el sonido justo, pero hay que
+     * empaquetarlo, decodificarlo y mantenerlo. Generando la onda queda la frecuencia
+     * exacta que se quiera, pesa unos kilobytes de memoria y no suma nada al APK.
+     *
+     * Los dos van por el canal de musica y no por el de notificaciones: ese ultimo queda
+     * mudo con el telefono en vibrador, que es como lo lleva casi todo el mundo. */
+    private val pitidoCerca = crearPitido(FRECUENCIA_HZ, DURACION_CERCA_MS)
+    private val pitidoPeligro = crearPitido(FRECUENCIA_HZ, DURACION_PELIGRO_MS)
 
     private var ultimoPulso = 0L
 
@@ -122,29 +125,83 @@ class AlertaProximidad(contexto: Context) {
             }
         }
 
-        /* Dos tonos distintos y no uno mas fuerte: el volumen se pierde en un salon con
-         * ruido, pero un tono mas agudo se distingue igual.
-         *
-         * El tono dura menos que el hueco entre dos avisos. startTone no encola: llamarlo
-         * mientras suena el anterior lo corta o lo ignora segun el equipo, y eso volvia
-         * irregular justo la cadencia rapida del peligro, que es cuando mas clara tiene
-         * que ser. */
+        /* Misma nota en los dos casos, como en un carro de verdad: lo que avisa es el
+         * ritmo, no el tono. Cambiando tambien la nota, el aviso deja de leerse como una
+         * misma cosa que se acelera y pasa a sonar como dos alarmas distintas. */
+        sonar(if (peligro) pitidoPeligro else pitidoCerca)
+    }
+
+    /**
+     * Reproduce un pitido ya sintetizado.
+     *
+     * Se corta el anterior antes de empezar. En peligro los avisos casi se tocan, y
+     * dejando que se superpongan el sonido se vuelve un zumbido sucio en vez de una
+     * seguidilla de pitidos.
+     */
+    private fun sonar(pitido: AudioTrack?) {
+        val pista = pitido ?: return
         runCatching {
-            tonos?.startTone(
-                if (peligro) ToneGenerator.TONE_CDMA_HIGH_L else ToneGenerator.TONE_PROP_BEEP,
-                if (peligro) 60 else 40
-            )
+            pista.stop()
+            pista.reloadStaticData()
+            pista.play()
         }
     }
+
+    /**
+     * Arma un pitido de onda senoidal, listo para repetir sin volver a calcularlo.
+     *
+     * Los bordes entran y salen con una rampa. Cortar la onda de golpe produce un
+     * chasquido audible que suena a error, y esa rampa de unos pocos milisegundos es la
+     * diferencia entre un pitido limpio y uno que parece roto.
+     */
+    private fun crearPitido(frecuencia: Int, duracionMs: Int): AudioTrack? = runCatching {
+        val muestras = MUESTREO_HZ * duracionMs / 1000
+        val onda = ShortArray(muestras)
+
+        val subida = MUESTREO_HZ * 3 / 1000     /* 3 ms */
+        val bajada = MUESTREO_HZ * 8 / 1000     /* 8 ms */
+
+        for (i in 0 until muestras) {
+            val fase = 2.0 * Math.PI * frecuencia * i / MUESTREO_HZ
+            val sobre = when {
+                i < subida -> i.toFloat() / subida
+                i > muestras - bajada -> (muestras - i).toFloat() / bajada
+                else -> 1f
+            }
+            onda[i] = (kotlin.math.sin(fase) * sobre * Short.MAX_VALUE * 0.75).toInt().toShort()
+        }
+
+        val bytes = onda.size * 2
+        AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(MUESTREO_HZ)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build()
+            )
+            .setBufferSizeInBytes(bytes)
+            .setTransferMode(AudioTrack.MODE_STATIC)
+            .build()
+            .also { it.write(onda, 0, onda.size) }
+    }.getOrNull()
 
     /** Corta cualquier aviso en curso. Se llama al soltar el mando. */
     fun silenciar() {
         riesgo = Riesgo.NINGUNO
-        runCatching { tonos?.stopTone() }
+        runCatching { pitidoCerca?.stop() }
+        runCatching { pitidoPeligro?.stop() }
     }
 
     fun liberar() {
-        runCatching { tonos?.release() }
+        runCatching { pitidoCerca?.release() }
+        runCatching { pitidoPeligro?.release() }
     }
 
     private companion object {
@@ -169,7 +226,17 @@ class AlertaProximidad(contexto: Context) {
         val FIGURA_PELIGRO = longArrayOf(0, 140)
         val FUERZAS_PELIGRO = intArrayOf(0, 255)
 
-        /* Ochenta sobre cien: se oye en un salon sin volverse molesto en la mano. */
-        const val VOLUMEN = 80
+        /* 2.6 kHz: la nota que usan los sensores de parqueo. Cae donde el oido humano
+         * es mas sensible y atraviesa el ruido de un salon sin necesidad de volumen. */
+        const val FRECUENCIA_HZ = 2600
+
+        /* Alcanza de sobra para 2.6 kHz y deja los buffers en unos pocos kilobytes. */
+        const val MUESTREO_HZ = 22050
+
+        /* Cada pitido dura menos que el hueco hasta el siguiente, incluso en la cadencia
+         * mas rapida: asi la seguidilla se oye como pitidos sueltos y no como un zumbido
+         * continuo, que es lo que distingue a un sensor de parqueo. */
+        const val DURACION_CERCA_MS = 45
+        const val DURACION_PELIGRO_MS = 70
     }
 }
