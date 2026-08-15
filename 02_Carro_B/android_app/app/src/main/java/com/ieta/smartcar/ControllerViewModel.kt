@@ -563,8 +563,13 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
         const val KEY_ESCUDO = "escudo_activo"
 
-        /** Un palmo escaso. Mas lejos estorbaria al maniobrar en un pasillo. */
-        const val DISTANCIA_ESCUDO_CM = 6f
+        /**
+         * Un palmo escaso. Mas lejos estorbaria al maniobrar en un pasillo.
+         *
+         * Ocho y no seis: a seis el sensor ya trabaja al filo de lo que puede medir, y
+         * una lectura que se pierde ahi suelta el escudo justo cuando mas hace falta.
+         */
+        const val DISTANCIA_ESCUDO_CM = 8f
         const val DEFAULT_TRIM = 100
 
         /** Debajo de 25 el techo cae al piso de torque y el acelerador deja de actuar. */
