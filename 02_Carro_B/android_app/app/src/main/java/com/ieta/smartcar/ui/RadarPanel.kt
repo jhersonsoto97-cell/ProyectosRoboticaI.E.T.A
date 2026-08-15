@@ -39,6 +39,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ieta.smartcar.alerta.Riesgo
 import com.ieta.smartcar.protocolo.EcoRadar
 import com.ieta.smartcar.ui.theme.Neon
 import kotlin.math.cos
@@ -64,6 +65,7 @@ fun RadarPanel(
     onAlcance: (Int) -> Unit,
     servoCentrado: Boolean,
     onCentrar: () -> Unit,
+    riesgo: Riesgo,
     modifier: Modifier = Modifier,
     ancho: Dp = 190.dp,
 ) {
@@ -91,7 +93,17 @@ fun RadarPanel(
                             listOf(Neon.Surface.copy(alpha = 0.85f), Color(0xFF04070E))
                         )
                     )
-                    .border(1.dp, Neon.Outline, RoundedCornerShape(14.dp))
+                    // El marco se tine con el riesgo. Es la senal que se ve de reojo,
+                    // sin tener que buscar un punto entre los demas.
+                    .border(
+                        width = if (riesgo == Riesgo.PELIGRO) 2.dp else 1.dp,
+                        color = when (riesgo) {
+                            Riesgo.PELIGRO -> Neon.Danger
+                            Riesgo.CERCA -> Neon.Warning
+                            Riesgo.NINGUNO -> Neon.Outline
+                        },
+                        shape = RoundedCornerShape(14.dp)
+                    )
             ) {
                 Canvas(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
                     /* El carro se dibuja abajo al centro y el barrido se abre hacia
@@ -139,10 +151,17 @@ fun RadarPanel(
                 Text(
                     text = when {
                         progresoEscaneo < 100 -> "ESCANEANDO $progresoEscaneo%"
+                        riesgo == Riesgo.PELIGRO -> "PELIGRO"
+                        riesgo == Riesgo.CERCA -> "CERCA"
                         ecos.isEmpty() -> "SIN ECOS"
                         else -> "${ecos.values.minOfOrNull { it.distanciaCm }?.toInt() ?: 0} CM"
                     },
-                    color = if (progresoEscaneo < 100) Neon.Warning else Neon.Cyan,
+                    color = when {
+                        progresoEscaneo < 100 -> Neon.Warning
+                        riesgo == Riesgo.PELIGRO -> Neon.Danger
+                        riesgo == Riesgo.CERCA -> Neon.Warning
+                        else -> Neon.Cyan
+                    },
                     fontSize = 8.sp,
                     letterSpacing = 1.sp,
                     fontWeight = FontWeight.Bold

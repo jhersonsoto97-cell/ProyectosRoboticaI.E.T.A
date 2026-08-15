@@ -33,6 +33,10 @@
     <!-- Solo para el transporte TCP contra el simulador del PC. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Aviso de proximidad al manejar: manejando se mira el carro y no la
+         pantalla, asi que el radar solo no alcanza. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!--
         Para unirse a la red que levanta el carro y, sobre todo, para atar los sockets a
         ella. Sin CHANGE_NETWORK_STATE el sistema rechaza el pedido de red y el telefono

@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ieta.smartcar.alerta.AlertaProximidad
+import com.ieta.smartcar.alerta.Riesgo
 import com.ieta.smartcar.carro.Carro
 import com.ieta.smartcar.carro.Garaje
 import com.ieta.smartcar.control.DriveMixer
@@ -106,6 +108,22 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
     /** Avance del escaneo en curso, de 0 a 100. En 100 el plano ya llego. */
     var progresoEscaneo by mutableStateOf(100); private set
+
+    private val alerta = AlertaProximidad(application)
+
+    /**
+     * Distancia al obstaculo mas cercano dentro del cono de avance.
+     *
+     * Solo el frente: un eco a 90 grados esta al costado, y frenar por algo que el carro
+     * va a pasar de largo entrena a ignorar el aviso.
+     */
+    val distanciaFrontal: Float?
+        get() = ecos.entries
+            .filter { kotlin.math.abs(it.key) <= CONO_FRONTAL_GRADOS }
+            .minOfOrNull { it.value.distanciaCm }
+
+    /** Que tan cerca esta lo de adelante. La interfaz lo muestra y la alerta lo suena. */
+    val riesgoProximidad: Riesgo get() = alerta.riesgo
 
     /** True mientras el brazo del sonar se sostiene en el centro para poder montarlo. */
     var servoCentrado by mutableStateOf(false); private set
@@ -404,7 +422,18 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         }
         wheelPower = power
 
-        if (link.state.value != LinkState.CONNECTED) return
+        if (link.state.value != LinkState.CONNECTED) {
+            alerta.silenciar()
+            return
+        }
+
+        // La alerta se evalua en este mismo tick y no en un temporizador aparte: un
+        // segundo reloj se desincroniza del estado real y termina avisando de obstaculos
+        // que ya se esquivaron.
+        alerta.evaluar(
+            distanciaCm = if (carro.capacidades.radar) distanciaFrontal else null,
+            avanzando = (power.left + power.right) / 2 > 0
+        )
 
         // La calibracion se reenvia periodicamente en lugar de una sola vez al cambiar.
         // Evita toda la logica de reintentos: si un paquete se pierde, o el carro se
@@ -447,6 +476,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
     override fun onCleared() {
         super.onCleared()
+        alerta.liberar()
         scanner.stop()   // deja registrado el BroadcastReceiver si no se cancela
         redWifi.soltar() // si no, el telefono queda atado a una red sin internet
         connectJob?.cancel()
@@ -460,6 +490,9 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
         const val TRIM_PERIOD_MS = 1000L
         const val CENTRADO_PERIOD_MS = 1000L
+
+        /** Medio cono de avance. Fuera de el, el carro pasa de largo. */
+        const val CONO_FRONTAL_GRADOS = 45
         const val DEFAULT_TRIM = 100
 
         /** Debajo de 25 el techo cae al piso de torque y el acelerador deja de actuar. */
