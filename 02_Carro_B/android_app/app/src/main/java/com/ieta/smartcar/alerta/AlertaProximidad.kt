@@ -94,20 +94,26 @@ class AlertaProximidad(contexto: Context) {
         return (PERIODO_MINIMO_MS + fraccion * (PERIODO_MAXIMO_MS - PERIODO_MINIMO_MS)).toLong()
     }
 
+    /**
+     * Vibra con una figura y no con un golpe suelto.
+     *
+     * Los sticks y los botones ya vibran una vez al tocarlos, asi que un pulso unico de
+     * la alerta se siente exactamente igual y no se distingue de haber rozado un control.
+     * Un ritmo si se reconoce sin pensarlo: dos toques cortos avisan, y un zumbido largo
+     * y continuo no se parece a nada mas de la interfaz.
+     */
     private fun pulsar(peligro: Boolean) {
-        val duracion = if (peligro) 55L else 25L
+        val figura = if (peligro) FIGURA_PELIGRO else FIGURA_CERCA
+        val fuerzas = if (peligro) FUERZAS_PELIGRO else FUERZAS_CERCA
 
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrador?.vibrate(
-                    VibrationEffect.createOneShot(
-                        duracion,
-                        if (peligro) VibrationEffect.DEFAULT_AMPLITUDE else 120
-                    )
-                )
+                vibrador?.vibrate(VibrationEffect.createWaveform(figura, fuerzas, -1))
             } else {
+                /* Antes de Android 8 no se puede pedir intensidad, solo el ritmo. El
+                 * ritmo es lo que distingue el aviso, asi que se conserva lo que importa. */
                 @Suppress("DEPRECATION")
-                vibrador?.vibrate(duracion)
+                vibrador?.vibrate(figura, -1)
             }
         }
 
@@ -135,11 +141,23 @@ class AlertaProximidad(contexto: Context) {
         /** Debajo de esto el aviso ya es continuo; el sensor tampoco mide mas cerca. */
         const val DISTANCIA_MINIMA = 10f
 
-        const val DISTANCIA_PELIGRO = 20f
-        const val DISTANCIA_AVISO = 45f
+        /* Medidos en el piso: con 20 y 45 el aviso llegaba tarde para frenar a paso
+         * normal. El carro necesita mas espacio del que sugiere mirarlo quieto. */
+        const val DISTANCIA_PELIGRO = 30f
+        const val DISTANCIA_AVISO = 55f
 
         const val PERIODO_MINIMO_MS = 110f
         const val PERIODO_MAXIMO_MS = 650f
+
+        /* Espera, toque, silencio, toque. Dos golpes cortos no se confunden con el
+         * unico que dan los sticks al agarrarlos. */
+        val FIGURA_CERCA = longArrayOf(0, 18, 55, 18)
+        val FUERZAS_CERCA = intArrayOf(0, 150, 0, 150)
+
+        /* Un zumbido largo y sostenido. Nada mas en la interfaz vibra asi, y por eso se
+         * reconoce sin haberlo aprendido. */
+        val FIGURA_PELIGRO = longArrayOf(0, 140)
+        val FUERZAS_PELIGRO = intArrayOf(0, 255)
 
         /* Ochenta sobre cien: se oye en un salon sin volverse molesto en la mano. */
         const val VOLUMEN = 80

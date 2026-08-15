@@ -118,9 +118,19 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
      * va a pasar de largo entrena a ignorar el aviso.
      */
     val distanciaFrontal: Float?
-        get() = ecos.entries
-            .filter { kotlin.math.abs(it.key) <= CONO_FRONTAL_GRADOS }
-            .minOfOrNull { it.value.distanciaCm }
+        get() {
+            // Solo lo medido hace poco. El radar conserva los ecos unos segundos para
+            // dibujar un rastro, pero la alarma no puede usarlos: al alejarse de una
+            // pared, el eco cercano de hace un rato seguia sonando como si el obstaculo
+            // continuara ahi, y el aviso no se apagaba hasta que vencia solo.
+            val ahora = System.currentTimeMillis()
+            return ecos.entries
+                .filter {
+                    kotlin.math.abs(it.key) <= CONO_FRONTAL_GRADOS &&
+                        ahora - it.value.instante <= FRESCURA_ALERTA_MS
+                }
+                .minOfOrNull { it.value.distanciaCm }
+        }
 
     /** Que tan cerca esta lo de adelante. La interfaz lo muestra y la alerta lo suena. */
     val riesgoProximidad: Riesgo get() = alerta.riesgo
@@ -493,6 +503,15 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
         /** Medio cono de avance. Fuera de el, el carro pasa de largo. */
         const val CONO_FRONTAL_GRADOS = 45
+
+        /**
+         * Edad maxima de un eco para que la alarma lo tenga en cuenta.
+         *
+         * Mas corto que la vida del punto en pantalla: el radar dibuja un rastro, pero
+         * la alarma tiene que hablar del presente. Un segundo y algo cubre el hueco que
+         * deja el servo mientras barre los costados, sin arrastrar lo de hace rato.
+         */
+        const val FRESCURA_ALERTA_MS = 1200L
         const val DEFAULT_TRIM = 100
 
         /** Debajo de 25 el techo cae al piso de torque y el acelerador deja de actuar. */
