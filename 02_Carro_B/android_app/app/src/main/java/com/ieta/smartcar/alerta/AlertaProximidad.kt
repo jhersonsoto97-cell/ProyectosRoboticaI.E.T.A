@@ -33,9 +33,14 @@ class AlertaProximidad(contexto: Context) {
     }
 
     /* Un generador de tonos evita empaquetar un archivo de audio y decodificarlo. Para
-     * un pitido corto, traer un sonido propio seria peso y trabajo sin nada a cambio. */
+     * un pitido corto, traer un sonido propio seria peso y trabajo sin nada a cambio.
+     *
+     * Va por el canal de musica y no por el de notificaciones. El de notificaciones
+     * queda mudo con el telefono en vibrador, que es justo como lo lleva casi todo el
+     * mundo, y ademas su volumen es un control aparte que nadie toca. El de musica es el
+     * que suben los botones del costado y sigue sonando en vibrador. */
     private val tonos: ToneGenerator? =
-        runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, VOLUMEN) }.getOrNull()
+        runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, VOLUMEN) }.getOrNull()
 
     private var ultimoPulso = 0L
 
@@ -118,11 +123,16 @@ class AlertaProximidad(contexto: Context) {
         }
 
         /* Dos tonos distintos y no uno mas fuerte: el volumen se pierde en un salon con
-         * ruido, pero un tono mas agudo se distingue igual. */
+         * ruido, pero un tono mas agudo se distingue igual.
+         *
+         * El tono dura menos que el hueco entre dos avisos. startTone no encola: llamarlo
+         * mientras suena el anterior lo corta o lo ignora segun el equipo, y eso volvia
+         * irregular justo la cadencia rapida del peligro, que es cuando mas clara tiene
+         * que ser. */
         runCatching {
             tonos?.startTone(
                 if (peligro) ToneGenerator.TONE_CDMA_HIGH_L else ToneGenerator.TONE_PROP_BEEP,
-                if (peligro) 90 else 45
+                if (peligro) 60 else 40
             )
         }
     }
