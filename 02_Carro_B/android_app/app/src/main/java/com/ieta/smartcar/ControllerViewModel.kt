@@ -120,7 +120,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     val distanciaFrontal: Float?
         get() {
             // Solo lo medido hace poco. El radar conserva los ecos unos segundos para
-            // dibujar un rastro, pero la alarma no puede usarlos: al alejarse de una
+            // dibujar un rastro, pero el aviso no puede usarlos: al alejarse de una
             // pared, el eco cercano de hace un rato seguia sonando como si el obstaculo
             // continuara ahi, y el aviso no se apagaba hasta que vencia solo.
             val ahora = System.currentTimeMillis()
@@ -131,6 +131,28 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
                 }
                 .minOfOrNull { it.value.distanciaCm }
         }
+
+    /**
+     * Lo mismo, pero sin descartar por antiguedad.
+     *
+     * El escudo no puede usar la ventana corta del aviso. El servo tarda mas de un
+     * segundo en volver a pasar por el mismo angulo, asi que mientras apunta al costado
+     * un obstaculo angosto que sigue justo enfrente desaparece de esa ventana y el
+     * escudo suelta. Es el hueco que deja cualquier ventana mas corta que el tiempo de
+     * revisita, y con un freno ese hueco termina en golpe.
+     *
+     * Aqui se toma la ultima medida conocida de cada direccion, tenga la edad que tenga.
+     * Cada angulo se corrige solo cuando el barrido vuelve a pasar por el: si el
+     * obstaculo ya no esta, esa direccion se reemplaza por una lectura lejana o se borra,
+     * y el escudo suelta con evidencia en vez de por olvido.
+     *
+     * Las dos reglas conviven a proposito. Al aviso le sale barato equivocarse callando;
+     * al escudo, equivocarse soltando le cuesta un choque.
+     */
+    private val distanciaFrontalRetenida: Float?
+        get() = ecos.entries
+            .filter { kotlin.math.abs(it.key) <= CONO_FRONTAL_GRADOS }
+            .minOfOrNull { it.value.distanciaCm }
 
     /** Que tan cerca esta lo de adelante. La interfaz lo muestra y la alerta lo suena. */
     val riesgoProximidad: Riesgo get() = alerta.riesgo
@@ -514,7 +536,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
      * uno que golpea despacio.
      */
     private fun aplicarEscudo(pedido: WheelPower): WheelPower {
-        val distancia = distanciaFrontal
+        val distancia = distanciaFrontalRetenida
         val bloquear = escudoActivo &&
             carro.capacidades.radar &&
             distancia != null &&
@@ -566,10 +588,10 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         /**
          * Un palmo escaso. Mas lejos estorbaria al maniobrar en un pasillo.
          *
-         * Ocho y no seis: a seis el sensor ya trabaja al filo de lo que puede medir, y
+         * Diez y no seis: a seis el sensor ya trabaja al filo de lo que puede medir, y
          * una lectura que se pierde ahi suelta el escudo justo cuando mas hace falta.
          */
-        const val DISTANCIA_ESCUDO_CM = 8f
+        const val DISTANCIA_ESCUDO_CM = 10f
         const val DEFAULT_TRIM = 100
 
         /** Debajo de 25 el techo cae al piso de torque y el acelerador deja de actuar. */
