@@ -231,6 +231,9 @@ fun GamepadScreen(
                     servoCentrado = viewModel.servoCentrado,
                     onCentrar = viewModel::alternarCentradoServo,
                     riesgo = viewModel.riesgoProximidad,
+                    escudoActivo = viewModel.escudoActivo,
+                    escudoFrenando = viewModel.escudoFrenando,
+                    onEscudo = viewModel::alternarEscudo,
                     ancho = minOf(porAlto, porAncho).coerceIn(190.dp, 330.dp),
                     // Colgado de la barra y no centrado: centrado dejaba un hueco muerto
                     // arriba, y ese hueco es justo lo que le faltaba de tamano.

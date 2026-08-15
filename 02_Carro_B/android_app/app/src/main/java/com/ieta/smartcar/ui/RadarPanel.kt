@@ -26,6 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -66,6 +67,9 @@ fun RadarPanel(
     servoCentrado: Boolean,
     onCentrar: () -> Unit,
     riesgo: Riesgo,
+    escudoActivo: Boolean,
+    escudoFrenando: Boolean,
+    onEscudo: () -> Unit,
     modifier: Modifier = Modifier,
     ancho: Dp = 190.dp,
 ) {
@@ -74,9 +78,12 @@ fun RadarPanel(
     val paso = pasoDeAnillo(alcanceCm)
 
     Row(modifier = modifier.width(ancho)) {
-        BotonCentrar(
-            activo = servoCentrado,
-            onClick = onCentrar,
+        ColumnaAcciones(
+            servoCentrado = servoCentrado,
+            onCentrar = onCentrar,
+            escudoActivo = escudoActivo,
+            escudoFrenando = escudoFrenando,
+            onEscudo = onEscudo,
             alto = anchoLamina * 0.62f
         )
 
@@ -191,59 +198,102 @@ fun RadarPanel(
  * esta mirando de verdad.
  */
 @Composable
-private fun BotonCentrar(
-    activo: Boolean,
-    onClick: () -> Unit,
+private fun ColumnaAcciones(
+    servoCentrado: Boolean,
+    onCentrar: () -> Unit,
+    escudoActivo: Boolean,
+    escudoFrenando: Boolean,
+    onEscudo: () -> Unit,
     alto: Dp,
 ) {
-    val acento = if (activo) Neon.Ok else Neon.TextMuted
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = Modifier.width(ANCHO_BOTON).height(alto)
     ) {
-        Box(
-            modifier = Modifier
-                .size(ANCHO_BOTON)
-                .clip(RoundedCornerShape(10.dp))
-                .background(
-                    if (activo) Neon.Ok.copy(alpha = 0.16f) else Neon.Surface
-                )
-                .border(
-                    1.dp,
-                    if (activo) Neon.Ok else Neon.Outline,
-                    RoundedCornerShape(10.dp)
-                )
-                .pointerInput(Unit) { detectTapGestures { onClick() } },
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.size(ANCHO_BOTON * 0.55f)) {
-                /* Una mira: dos ejes y un circulo. Dice "esto apunta al frente" sin
-                 * necesidad de una palabra que no cabe a este ancho. */
-                val medio = size.width / 2f
-                val trazo = size.width * 0.09f
+        BotonLateral(
+            rotulo = if (servoCentrado) "FIJO" else "CENTRO",
+            acento = if (servoCentrado) Neon.Ok else Neon.TextMuted,
+            onClick = onCentrar
+        ) { color -> dibujarMira(color) }
 
-                drawLine(acento, Offset(medio, 0f), Offset(medio, size.height), trazo)
-                drawLine(acento, Offset(0f, medio), Offset(size.width, medio), trazo)
-                drawCircle(
-                    color = acento,
-                    radius = size.width * 0.30f,
-                    style = Stroke(width = trazo)
-                )
-            }
-        }
+        Spacer(Modifier.height(12.dp))
 
-        Spacer(Modifier.height(5.dp))
-
-        Text(
-            text = if (activo) "FIJO" else "CENTRO",
-            color = acento,
-            fontSize = 7.sp,
-            letterSpacing = 0.5.sp,
-            fontWeight = FontWeight.Bold
-        )
+        /* Rojo mientras retiene: apagado se ve que esta puesto, encendido se ve que
+         * esta actuando. Sin ese cambio, el carro deja de avanzar y no queda claro si
+         * fue el escudo o si algo se rompio. */
+        BotonLateral(
+            rotulo = if (escudoFrenando) "FRENA" else "ESCUDO",
+            acento = when {
+                escudoFrenando -> Neon.Danger
+                escudoActivo -> Neon.Ok
+                else -> Neon.TextMuted
+            },
+            onClick = onEscudo
+        ) { color -> dibujarEscudo(color) }
     }
+}
+
+/** Boton chico de la columna lateral: un dibujo, un rotulo y nada mas. */
+@Composable
+private fun BotonLateral(
+    rotulo: String,
+    acento: Color,
+    onClick: () -> Unit,
+    dibujo: DrawScope.(Color) -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(ANCHO_BOTON)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (acento == Neon.TextMuted) Neon.Surface else acento.copy(alpha = 0.16f))
+            .border(1.dp, if (acento == Neon.TextMuted) Neon.Outline else acento,
+                RoundedCornerShape(10.dp))
+            .pointerInput(Unit) { detectTapGestures { onClick() } },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.size(ANCHO_BOTON * 0.55f)) { dibujo(acento) }
+    }
+
+    Spacer(Modifier.height(5.dp))
+
+    Text(
+        text = rotulo,
+        color = acento,
+        fontSize = 7.sp,
+        letterSpacing = 0.5.sp,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+/** Una mira: dice "esto apunta al frente" sin una palabra que no cabe a este ancho. */
+private fun DrawScope.dibujarMira(color: Color) {
+    val medio = size.width / 2f
+    val trazo = size.width * 0.09f
+
+    drawLine(color, Offset(medio, 0f), Offset(medio, size.height), trazo)
+    drawLine(color, Offset(0f, medio), Offset(size.width, medio), trazo)
+    drawCircle(color = color, radius = size.width * 0.30f, style = Stroke(width = trazo))
+}
+
+/** Un escudo. La forma dice "protege" mas rapido que cualquier rotulo. */
+private fun DrawScope.dibujarEscudo(color: Color) {
+    val w = size.width
+    val h = size.height
+    val trazo = w * 0.09f
+
+    val forma = Path().apply {
+        moveTo(w * 0.5f, h * 0.06f)
+        lineTo(w * 0.90f, h * 0.24f)
+        lineTo(w * 0.90f, h * 0.52f)
+        cubicTo(w * 0.90f, h * 0.78f, w * 0.72f, h * 0.90f, w * 0.5f, h * 0.96f)
+        cubicTo(w * 0.28f, h * 0.90f, w * 0.10f, h * 0.78f, w * 0.10f, h * 0.52f)
+        lineTo(w * 0.10f, h * 0.24f)
+        close()
+    }
+
+    drawPath(forma, color = color.copy(alpha = 0.18f))
+    drawPath(forma, color = color, style = Stroke(width = trazo))
 }
 
 /**

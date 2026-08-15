@@ -194,6 +194,23 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         prefs.edit().putInt(KEY_ALCANCE_RADAR, alcanceRadar).apply()
     }
 
+    /**
+     * Escudo: impide acelerar hacia adelante con algo pegado al frente.
+     *
+     * Arranca encendido y se recuerda. Es una proteccion, y una proteccion que hay que
+     * acordarse de encender en cada sesion no protege de nada.
+     */
+    var escudoActivo by mutableStateOf(prefs.getBoolean(KEY_ESCUDO, true))
+        private set
+
+    /** True en el instante en que el escudo esta reteniendo el avance. */
+    var escudoFrenando by mutableStateOf(false); private set
+
+    fun alternarEscudo() {
+        escudoActivo = !escudoActivo
+        prefs.edit().putBoolean(KEY_ESCUDO, escudoActivo).apply()
+    }
+
     val stickTravelScale: Float get() = stickTravel / 100f
 
     private val tuning: DriveTuning
@@ -423,13 +440,14 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun transmit() {
-        val power = if (emergencyStop) {
+        var power = if (emergencyStop) {
             WheelPower(0, 0)
         } else {
             DriveMixer.mix(
                 mode, leftStickY, leftStickX, rightStickY, rightStickX, speedCap, tuning
             )
         }
+        power = aplicarEscudo(power)
         wheelPower = power
 
         if (link.state.value != LinkState.CONNECTED) {
@@ -484,6 +502,36 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         protocolo.codificar(OrdenCarro.Conducir(power.left, power.right))?.let { link.send(it) }
     }
 
+    /**
+     * Anula el avance cuando hay algo pegado al frente, dejando intacto el giro.
+     *
+     * Se descompone la orden en avance y giro para poder tocar solo el avance. Cortando
+     * las dos ruedas a secas, el carro quedaria clavado contra la pared sin manera de
+     * salir; asi puede girar sobre su eje y retroceder, que es como se sale de ahi.
+     *
+     * Sin lectura fresca no frena. Un sensor que se queda callado no es prueba de que
+     * haya un obstaculo, y un carro que deja de responder por falta de datos es peor que
+     * uno que golpea despacio.
+     */
+    private fun aplicarEscudo(pedido: WheelPower): WheelPower {
+        val distancia = distanciaFrontal
+        val bloquear = escudoActivo &&
+            carro.capacidades.radar &&
+            distancia != null &&
+            distancia > 0f &&
+            distancia <= DISTANCIA_ESCUDO_CM
+
+        val avance = (pedido.left + pedido.right) / 2
+        escudoFrenando = bloquear && avance > 0
+
+        if (!escudoFrenando) {
+            return pedido
+        }
+
+        val giro = (pedido.left - pedido.right) / 2
+        return WheelPower(left = giro, right = -giro)
+    }
+
     override fun onCleared() {
         super.onCleared()
         alerta.liberar()
@@ -512,6 +560,11 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
          * deja el servo mientras barre los costados, sin arrastrar lo de hace rato.
          */
         const val FRESCURA_ALERTA_MS = 1200L
+
+        const val KEY_ESCUDO = "escudo_activo"
+
+        /** Un palmo escaso. Mas lejos estorbaria al maniobrar en un pasillo. */
+        const val DISTANCIA_ESCUDO_CM = 6f
         const val DEFAULT_TRIM = 100
 
         /** Debajo de 25 el techo cae al piso de torque y el acelerador deja de actuar. */
