@@ -68,6 +68,14 @@ private val ALTO_BARRA = 58.dp
 /** Lo que ocupa la fila de botones de abajo con su margen. */
 private val ALTO_BOTONERA = 98.dp
 
+/**
+ * Lo que separa cada stick del borde de abajo.
+ *
+ * Es una constante y no un numero suelto porque de el depende donde empieza el borde
+ * superior de los sticks, y de ahi cuelga el tamano del radar y la altura de los logos.
+ */
+private val MARGEN_STICK = 6.dp
+
 @Composable
 fun GamepadScreen(
     viewModel: ControllerViewModel,
@@ -121,9 +129,23 @@ fun GamepadScreen(
             // perdidos en un mar de espacio vacio. Ese tope se agarra recien pasando los
             // 730 dp de alto, asi que en telefono no cambia nada.
             //
-            // Y no mas de 380: los dos sticks y la fila de botones comparten el ancho, y
-            // creciendo mas se pisan entre ellos.
-            val stickDiameter = (maxHeight * 0.52f).coerceIn(150.dp, 380.dp)
+            // Y no mas de 310: el pulgar no se alarga porque la pantalla sea mas grande,
+            // asi que pasado ese tamano el stick solo pide mas recorrido para dar la misma
+            // orden. El ancho que deja de comerse se lo lleva el radar, que si gana algo
+            // con cada punto extra.
+            //
+            // En 310 las dos cotas del radar dan el mismo numero en una tablet de diez
+            // pulgadas: el pasillo entre los sticks y la banda que queda encima de ellos.
+            // Que coincidan quiere decir que no sobra ni ancho ni alto, que es lo mas
+            // grande que el radar puede ser sin empujar a nadie.
+            val stickDiameter = (maxHeight * 0.52f).coerceIn(150.dp, 310.dp)
+
+            // Geometria que comparten los logos y el radar: la banda entre la barra de
+            // arriba y el borde superior de los sticks. Es la unica zona de la pantalla
+            // sin controles, asi que ahi va todo lo que se mira y no se toca.
+            val topeBanda = ALTO_BARRA + 10.dp
+            val bandaSobreSticks = maxHeight - stickDiameter - MARGEN_STICK - topeBanda
+            val centroBanda = topeBanda + bandaSobreSticks / 2
 
             TopBar(
                 carro = viewModel.carro,
@@ -142,13 +164,19 @@ fun GamepadScreen(
             // al wordmark porque es una figura vertical: igualando alturas se veria la
             // mitad de grande, y a este tamano el escudo se reconoce por su silueta y
             // sus colores aunque las leyendas no alcancen a leerse.
+            //
+            // Centrado en la banda, igual que el de la derecha y que el radar. Antes cada
+            // uno colgaba de una fraccion distinta del alto y en una tablet, con la banda
+            // mucho mas alta, esas fracciones los dejaban a distintas alturas y flotando
+            // sin relacion con nada.
+            val altoEscudo = (maxHeight * 0.21f).coerceIn(58.dp, 170.dp)
             Image(
                 painter = painterResource(R.drawable.ic_escudo),
                 contentDescription = null,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = maxHeight * 0.17f, start = 18.dp)
-                    .height((maxHeight * 0.21f).coerceIn(58.dp, 160.dp))
+                    .padding(top = centroBanda - altoEscudo / 2, start = 18.dp)
+                    .height(altoEscudo)
             )
 
             // Logo del autor, arrimado a la derecha bajo el engranaje. La banda que
@@ -158,10 +186,8 @@ fun GamepadScreen(
             // Se dimensiona por altura y el ancho lo resuelve la proporcion de la
             // imagen, de modo que las trazas del wordmark se leen completas.
             //
-            // Baja mas que el escudo para quedar centrado contra el: el escudo ocupa
-            // desde 0.17 hasta 0.38 del alto, o sea que su mitad cae en 0.275, y restarle
-            // media altura del wordmark deja los dos sobre la misma linea. Alineandolos
-            // por el borde de arriba el de la derecha parecia colgado.
+            // Comparte el centro de la banda con el escudo, asi los dos quedan sobre la
+            // misma linea sin depender de que sus alturas coincidan.
             //
             // Va a opacidad plena. Es trazo blanco sobre fondo oscuro, y atenuado se leia
             // como un elemento apagado al lado del escudo, que es a todo color.
@@ -169,13 +195,14 @@ fun GamepadScreen(
             // Tocandolo se abren las redes del autor. Es el unico control de la pantalla
             // sin rotulo, y esta bien asi: nadie lo va a pulsar sin querer mientras maneja
             // porque queda fuera del alcance de los pulgares.
+            val altoMarca = (maxHeight * 0.12f).coerceIn(32.dp, 96.dp)
             Image(
                 painter = painterResource(R.drawable.ic_brand),
                 contentDescription = "Redes del autor",
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = maxHeight * 0.215f, end = 18.dp)
-                    .height((maxHeight * 0.12f).coerceIn(32.dp, 80.dp))
+                    .padding(top = centroBanda - altoMarca / 2, end = 18.dp)
+                    .height(altoMarca)
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { showSocial = true }
             )
@@ -192,7 +219,7 @@ fun GamepadScreen(
                 onChange = viewModel::onLeftStick,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 10.dp, bottom = 6.dp)
+                    .padding(start = 10.dp, bottom = MARGEN_STICK)
             )
 
             JoystickPad(
@@ -208,24 +235,35 @@ fun GamepadScreen(
                 onChange = viewModel::onRightStick,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 10.dp, bottom = 6.dp)
+                    .padding(end = 10.dp, bottom = MARGEN_STICK)
             )
 
             // Un carro con sonar usa el centro para el radar y baja el enlace a la fila
             // de botones. Mirar el radar mientras se maneja es lo que le da sentido: un
             // obstaculo a la derecha solo sirve si se ve antes de doblar.
             if (viewModel.carro.capacidades.radar) {
-                // El radar ocupa toda la banda libre entre la barra de arriba y la fila
-                // de botones. Se calculan los dos limites y manda el mas chico: en un
-                // telefono ancho lo que aprieta es el alto, y en uno angosto son los
-                // sticks, que dejan poco pasillo en el medio.
+                // Hay dos formas distintas de que el radar quepa, y gana la que da mas
+                // tamano:
                 //
-                // Los 44 dp que se descuentan son el aire de arriba y de abajo mas el
-                // renglon de rotulos. Llenando la banda entera el recuadro terminaba
-                // tocando la barra y los rotulos quedaban pegados a los botones.
-                val bandaLibre = maxHeight - ALTO_BARRA - ALTO_BOTONERA
-                val porAlto = (bandaLibre - 44.dp) / 0.62f
-                val porAncho = maxWidth - (stickDiameter + 20.dp) * 2 - 20.dp
+                //  - Metido en el pasillo entre los sticks. Puede bajar todo lo que
+                //    quiera, pero no puede ser mas ancho que ese pasillo.
+                //  - Apoyado encima de los sticks. Usa el ancho entero de la pantalla,
+                //    pero no puede pasar del borde de arriba de ellos.
+                //
+                // En un telefono gana la primera y nada cambia. En una tablet gana la
+                // segunda por lejos: sobra ancho y lo que falta es alto, mientras que el
+                // pasillo entre los sticks sigue igual de angosto por mas grande que sea
+                // la pantalla. Calcular solo el pasillo, que es lo que se hacia, dejaba
+                // el radar del tamano de un telefono con media pantalla vacia al lado.
+                //
+                // Los 44 dp que se descuentan en ambas son el aire de arriba y de abajo
+                // mas el renglon de rotulos.
+                val pasillo = maxWidth - (stickDiameter + 20.dp) * 2 - 20.dp
+                val bandaEntreSticks = maxHeight - ALTO_BARRA - ALTO_BOTONERA
+
+                val entreSticks = minOf(pasillo, (bandaEntreSticks - 44.dp) / 0.62f)
+                val sobreSticks =
+                    minOf(maxWidth - 40.dp, (bandaSobreSticks - 44.dp) / 0.62f)
 
                 RadarPanel(
                     ecos = viewModel.ecos,
@@ -240,12 +278,12 @@ fun GamepadScreen(
                     escudoActivo = viewModel.escudoActivo,
                     escudoFrenando = viewModel.escudoFrenando,
                     onEscudo = viewModel::alternarEscudo,
-                    ancho = minOf(porAlto, porAncho).coerceIn(190.dp, 520.dp),
+                    ancho = maxOf(entreSticks, sobreSticks).coerceIn(190.dp, 620.dp),
                     // Colgado de la barra y no centrado: centrado dejaba un hueco muerto
                     // arriba, y ese hueco es justo lo que le faltaba de tamano.
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = ALTO_BARRA + 10.dp)
+                        .padding(top = topeBanda)
                 )
             } else {
                 CenterConsole(
