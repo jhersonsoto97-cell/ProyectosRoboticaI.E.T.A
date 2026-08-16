@@ -1,0 +1,4 @@
+# Configuracion local de Claude Code. Son listas de permisos con rutas absolutas de la
+# maquina de cada uno, asi que compartirlas no le sirve a nadie y ensucia el estado del
+# repositorio con cambios que no son del proyecto.
+.claude/
