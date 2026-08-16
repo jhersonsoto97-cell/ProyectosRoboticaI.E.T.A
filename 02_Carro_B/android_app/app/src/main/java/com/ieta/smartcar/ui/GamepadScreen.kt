@@ -145,7 +145,15 @@ fun GamepadScreen(
             // sin controles, asi que ahi va todo lo que se mira y no se toca.
             val topeBanda = ALTO_BARRA + 10.dp
             val bandaSobreSticks = maxHeight - stickDiameter - MARGEN_STICK - topeBanda
-            val centroBanda = topeBanda + bandaSobreSticks / 2
+            // Los logos cuelgan del techo de la banda, no de una fraccion de su alto.
+            // Colgados de una fraccion flotaban a media altura, lejos de la barra y lejos
+            // de los sticks, sin pertenecer a nada; y en tablet, con la banda mucho mas
+            // alta, la misma fraccion los bajaba todavia mas. Pegados al tope se leen como
+            // encabezado y ademas quedan a la misma altura en cualquier pantalla.
+            //
+            // Se alinean por el borde de arriba y no por su centro: es lo que los deja
+            // parejos entre si pese a que el escudo mide bastante mas que el wordmark.
+            val topeLogos = topeBanda + 4.dp
 
             TopBar(
                 carro = viewModel.carro,
@@ -165,17 +173,13 @@ fun GamepadScreen(
             // mitad de grande, y a este tamano el escudo se reconoce por su silueta y
             // sus colores aunque las leyendas no alcancen a leerse.
             //
-            // Centrado en la banda, igual que el de la derecha y que el radar. Antes cada
-            // uno colgaba de una fraccion distinta del alto y en una tablet, con la banda
-            // mucho mas alta, esas fracciones los dejaban a distintas alturas y flotando
-            // sin relacion con nada.
             val altoEscudo = (maxHeight * 0.21f).coerceIn(58.dp, 170.dp)
             Image(
                 painter = painterResource(R.drawable.ic_escudo),
                 contentDescription = null,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = centroBanda - altoEscudo / 2, start = 18.dp)
+                    .padding(top = topeLogos, start = 18.dp)
                     .height(altoEscudo)
             )
 
@@ -186,8 +190,8 @@ fun GamepadScreen(
             // Se dimensiona por altura y el ancho lo resuelve la proporcion de la
             // imagen, de modo que las trazas del wordmark se leen completas.
             //
-            // Comparte el centro de la banda con el escudo, asi los dos quedan sobre la
-            // misma linea sin depender de que sus alturas coincidan.
+            // Cuelga del mismo tope que el escudo, asi los dos arrancan sobre la misma
+            // linea sin depender de que sus alturas coincidan.
             //
             // Va a opacidad plena. Es trazo blanco sobre fondo oscuro, y atenuado se leia
             // como un elemento apagado al lado del escudo, que es a todo color.
@@ -195,17 +199,47 @@ fun GamepadScreen(
             // Tocandolo se abren las redes del autor. Es el unico control de la pantalla
             // sin rotulo, y esta bien asi: nadie lo va a pulsar sin querer mientras maneja
             // porque queda fuera del alcance de los pulgares.
-            val altoMarca = (maxHeight * 0.12f).coerceIn(32.dp, 96.dp)
-            Image(
-                painter = painterResource(R.drawable.ic_brand),
-                contentDescription = "Redes del autor",
+            val altoMarca = (maxHeight * 0.15f).coerceIn(38.dp, 120.dp)
+
+            // Un halo detras. El escudo es a todo color y gana la mirada solo; el wordmark
+            // es trazo blanco sobre fondo casi negro y compite en desventaja. El resplandor
+            // le da cuerpo sin tocar la paleta ni ponerle un recuadro que lo encajone.
+            //
+            // El halo entra en la caja y no alrededor, asi que la caja mide mas que la
+            // imagen por todos lados y hay que descontarlo al ubicarla; si no, el logo
+            // arranca una aureola mas abajo y mas adentro que el escudo.
+            val aureola = altoMarca * 0.24f
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = centroBanda - altoMarca / 2, end = 18.dp)
-                    .height(altoMarca)
-                    .clip(RoundedCornerShape(8.dp))
+                    .padding(
+                        top = (topeLogos - aureola).coerceAtLeast(0.dp),
+                        end = (18.dp - aureola).coerceAtLeast(4.dp)
+                    )
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        // Tres paradas y no dos: con solo el centro y el borde, el
+                        // degradado se estira parejo y sale una nube difusa. Metiendo
+                        // una parada intermedia baja rapido y queda un resplandor
+                        // pegado al trazo, que es lo que resalta sin ensuciar el fondo.
+                        Brush.radialGradient(
+                            listOf(
+                                Neon.Cyan.copy(alpha = 0.30f),
+                                Neon.Cyan.copy(alpha = 0.08f),
+                                Color.Transparent
+                            )
+                        )
+                    )
                     .clickable { showSocial = true }
-            )
+                    .padding(aureola),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_brand),
+                    contentDescription = "Redes del autor",
+                    modifier = Modifier.height(altoMarca)
+                )
+            }
 
             // Los sticks van anclados a las esquinas de abajo y no centrados a media
             // altura: sosteniendo el telefono con las dos manos, los pulgares descansan
