@@ -61,6 +61,12 @@ class RedWifi(private val context: Context) {
      *
      * Sirve para no molestar con el dialogo del sistema a quien ya se unio a mano desde
      * los ajustes, que es lo que la mayoria hace la primera vez.
+     *
+     * Devuelve null mas seguido de lo que parece. Desde Android 8.1 leer este nombre exige
+     * permiso de ubicacion concedido y el GPS del sistema encendido, porque la red a la
+     * que uno esta unido delata donde esta. Sin eso el sistema contesta "<unknown ssid>"
+     * aunque la conexion este perfecta, asi que **no sirve para decidir nada**: solo para
+     * confirmar en pantalla cuando se deja leer.
      */
     fun redActual(): String? {
         val wifi = context.applicationContext
@@ -179,15 +185,31 @@ class RedWifi(private val context: Context) {
         (red ?: redWifiDelSistema())?.let { runCatching { it.bindSocket(socket) } }
     }
 
-    /** La WiFi que el telefono ya tiene levantada, la haya pedido la app o no. */
-    private fun redWifiDelSistema(): Network? {
+    /**
+     * Si el telefono tiene alguna WiFi levantada, sin importar cual.
+     *
+     * Saber el nombre de la red exige permisos; saber que hay WiFi no exige ninguno.
+     * Cuando el nombre no se deja leer, esto es lo unico cierto que queda para decirle
+     * algo honesto a quien mira la pantalla, en vez de afirmar que no hay red.
+     */
+    fun hayWifi(): Boolean = (red ?: redWifiDelSistema()) != null
+
+    /**
+     * La WiFi que el telefono ya tiene levantada, la haya pedido la app o no.
+     *
+     * Envuelto entero y no solo por prolijidad: preguntar por las redes del sistema lanza
+     * SecurityException si falta el permiso, y esta consulta se hace tanto al pintar la
+     * pantalla como al abrir el socket. Que una consulta informativa pueda tumbar la app
+     * es peor que no saber la respuesta.
+     */
+    private fun redWifiDelSistema(): Network? = runCatching {
         @Suppress("DEPRECATION")
         val disponibles = gestor.allNetworks
-        return disponibles.firstOrNull { candidata ->
+        disponibles.firstOrNull { candidata ->
             gestor.getNetworkCapabilities(candidata)
                 ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
         }
-    }
+    }.getOrNull()
 
     /**
      * Si este telefono puede unirse a una red desde la app.

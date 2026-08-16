@@ -45,6 +45,13 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 
+    <!-- Para preguntarle al sistema que redes tiene levantadas. Sin este permiso
+         getAllNetworks() no falla devolviendo una lista vacia: lanza SecurityException y
+         tumba la app. Es un permiso normal, se concede al instalar y no le pregunta nada
+         al usuario. Faltaba, y el unico motivo por el que no se noto antes es que la
+         llamada ocurria en segundo plano, donde la excepcion se perdia. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- required=false: el emulador no tiene radio Bluetooth y aun asi debe poder
          instalar la app para probar la interfaz contra el simulador. -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

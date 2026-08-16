@@ -300,6 +300,7 @@ fun GamepadScreen(
             estadoRed = viewModel.redWifi.estado.collectAsState().value,
             detalleRed = viewModel.redWifi.detalle.collectAsState().value,
             redActual = viewModel.redWifi.redActual(),
+            hayWifi = viewModel.redWifi.hayWifi(),
             puedeUnirseSolo = viewModel.redWifi.puedeUnirseSolo,
             onAbrirAjustesWifi = { abrirAjustesWifi(contexto) },
             errorEnlace = if (linkState == LinkState.ERROR) lastError else null,
@@ -869,6 +870,7 @@ private fun RedDelCarroDialog(
     estadoRed: RedWifi.Estado,
     detalleRed: String?,
     redActual: String?,
+    hayWifi: Boolean,
     puedeUnirseSolo: Boolean,
     onAbrirAjustesWifi: () -> Unit,
     errorEnlace: String?,
@@ -878,6 +880,12 @@ private fun RedDelCarroDialog(
     onDismiss: () -> Unit,
 ) {
     val enSuRed = redActual == carro.red || estadoRed == RedWifi.Estado.UNIDO
+
+    /* Hay WiFi pero el sistema no suelta el nombre. Es el caso normal en las tablets del
+     * colegio, no una rareza: sin permiso de ubicacion, Android 8.1 en adelante esconde
+     * el SSID. Decir "ninguna" ahi seria mentir sobre algo que el usuario esta viendo
+     * conectado en su barra de estado. */
+    val redIlegible = redActual == null && hayWifi
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -910,14 +918,21 @@ private fun RedDelCarroDialog(
                         modifier = Modifier
                             .size(9.dp)
                             .clip(CircleShape)
-                            .background(if (enSuRed) Neon.Ok else Neon.TextMuted)
+                            .background(
+                                when {
+                                    enSuRed -> Neon.Ok
+                                    redIlegible -> Neon.Warning
+                                    else -> Neon.TextMuted
+                                }
+                            )
                     )
                     Spacer(Modifier.width(9.dp))
                     Text(
-                        text = if (enSuRed) {
-                            "Estás en ${carro.red}"
-                        } else {
-                            "Red actual: ${redActual ?: "ninguna"}"
+                        text = when {
+                            enSuRed -> "Estás en ${carro.red}"
+                            redActual != null -> "Red actual: $redActual"
+                            hayWifi -> "WiFi conectado, sin poder ver a cuál"
+                            else -> "Sin WiFi"
                         },
                         color = if (enSuRed) Neon.Ok else Neon.TextPrimary,
                         fontSize = 12.sp
@@ -978,14 +993,23 @@ private fun RedDelCarroDialog(
                 Spacer(Modifier.height(10.dp))
                 SectionLabel("PASO 2  ·  ABRIR EL MANDO")
 
+                /* Siempre habilitado, aunque no se sepa a que red esta unido el telefono.
+                 *
+                 * Antes se exigia reconocer el SSID para dejar tocarlo, y en Android 9 ese
+                 * nombre no se puede leer sin permiso de ubicacion: el boton quedaba muerto
+                 * para siempre con el carro perfectamente conectado.
+                 *
+                 * El SSID era ademas el dato equivocado para decidir. Lo que importa no es
+                 * como se llama la red sino si el carro contesta, y eso se sabe abriendo el
+                 * socket, que tarda cinco segundos y falla con un motivo concreto. Un boton
+                 * apagado no explica nada; un intento fallido si. */
                 TextButton(
                     onClick = onConectar,
-                    enabled = enSuRed,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = "CONECTAR AL CARRO",
-                        color = if (enSuRed) Neon.Ok else Neon.TextMuted,
+                        color = if (enSuRed) Neon.Ok else Neon.Cyan,
                         fontSize = 13.sp,
                         letterSpacing = 1.sp,
                         fontWeight = FontWeight.Bold
