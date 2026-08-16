@@ -24,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -88,8 +87,11 @@ fun GarajeScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(start = 18.dp, top = 14.dp)
-                    .height((maxHeight * 0.15f).coerceIn(40.dp, 96.dp))
-                    .alpha(0.9f)
+                    // El tope es lo que manda en una tablet, no la fraccion: a 800 dp de
+                    // alto la cuenta da de sobra y lo que recortaba era el limite, pensado
+                    // cuando la app solo corria en telefonos. El escudo lleva leyendas
+                    // finas y a 90 dp se volvia una mancha de color sin forma.
+                    .height((maxHeight * 0.17f).coerceIn(44.dp, 150.dp))
             )
 
             Image(
@@ -98,7 +100,7 @@ fun GarajeScreen(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(end = 18.dp, top = 22.dp)
-                    .height((maxHeight * 0.09f).coerceIn(24.dp, 64.dp))
+                    .height((maxHeight * 0.10f).coerceIn(26.dp, 96.dp))
             )
 
             Column(

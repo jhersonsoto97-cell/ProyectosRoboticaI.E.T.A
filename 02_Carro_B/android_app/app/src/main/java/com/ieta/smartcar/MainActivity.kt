@@ -73,11 +73,7 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
+        ocultarBarras()
 
         setContent {
             SmartCarTheme {
@@ -117,6 +113,33 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Vuelve a esconder las barras del sistema cada vez que la app recupera el foco.
+     *
+     * Esconderlas una sola vez en onCreate no alcanza. Bajar la cortina de notificaciones
+     * le quita el foco a la ventana, y al cerrarla las barras se quedan puestas: el mando
+     * queda recortado por arriba hasta que se cierra y se vuelve a abrir la app. Con la
+     * tablet en manos de un estudiante, esa cortina se baja sin querer todo el tiempo.
+     *
+     * El foco es la senal correcta y no onResume, porque la cortina se superpone sin
+     * pausar la actividad: onResume no llega a ejecutarse en ese caso.
+     */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) ocultarBarras()
+    }
+
+    private fun ocultarBarras() {
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            // Deslizar desde el borde las muestra un momento y se vuelven a ir solas. La
+            // alternativa las deja fijas, y cualquier roce en el borde le comeria una
+            // franja de pantalla al mando en plena maniobra.
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 

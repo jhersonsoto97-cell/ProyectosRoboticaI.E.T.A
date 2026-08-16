@@ -43,7 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -149,8 +148,7 @@ fun GamepadScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(top = maxHeight * 0.17f, start = 18.dp)
-                    .height((maxHeight * 0.21f).coerceIn(58.dp, 140.dp))
-                    .alpha(0.9f)
+                    .height((maxHeight * 0.21f).coerceIn(58.dp, 160.dp))
             )
 
             // Logo del autor, arrimado a la derecha bajo el engranaje. La banda que
