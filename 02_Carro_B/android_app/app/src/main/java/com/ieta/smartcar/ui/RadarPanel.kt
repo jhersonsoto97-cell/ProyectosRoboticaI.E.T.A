@@ -74,7 +74,12 @@ fun RadarPanel(
     ancho: Dp = 190.dp,
 ) {
     val medidor = rememberTextMeasurer()
-    val anchoLamina = ancho - ANCHO_SLIDER - ANCHO_BOTON - 16.dp
+    // Los controles laterales crecen con el panel. Con un ancho fijo quedaban en 34 dp
+    // en una tablet, por debajo del minimo que un dedo acierta comodo, y estas pantallas
+    // las va a usar gente que recien conoce la app.
+    val anchoBoton = (ancho * 0.11f).coerceIn(34.dp, 56.dp)
+    val anchoSlider = (ancho * 0.08f).coerceIn(26.dp, 40.dp)
+    val anchoLamina = ancho - anchoSlider - anchoBoton - 16.dp
     val paso = pasoDeAnillo(alcanceCm)
 
     Row(modifier = modifier.width(ancho)) {
@@ -84,6 +89,7 @@ fun RadarPanel(
             escudoActivo = escudoActivo,
             escudoFrenando = escudoFrenando,
             onEscudo = onEscudo,
+            lado = anchoBoton,
             alto = anchoLamina * 0.62f
         )
 
@@ -181,6 +187,7 @@ fun RadarPanel(
         SliderAlcance(
             alcanceCm = alcanceCm,
             onAlcance = onAlcance,
+            ancho = anchoSlider,
             alto = anchoLamina * 0.62f
         )
     }
@@ -204,16 +211,18 @@ private fun ColumnaAcciones(
     escudoActivo: Boolean,
     escudoFrenando: Boolean,
     onEscudo: () -> Unit,
+    lado: Dp,
     alto: Dp,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier.width(ANCHO_BOTON).height(alto)
+        modifier = Modifier.width(lado).height(alto)
     ) {
         BotonLateral(
             rotulo = if (servoCentrado) "FIJO" else "CENTRO",
             acento = if (servoCentrado) Neon.Ok else Neon.TextMuted,
+            lado = lado,
             onClick = onCentrar
         ) { color -> dibujarMira(color) }
 
@@ -229,6 +238,7 @@ private fun ColumnaAcciones(
                 escudoActivo -> Neon.Ok
                 else -> Neon.TextMuted
             },
+            lado = lado,
             onClick = onEscudo
         ) { color -> dibujarEscudo(color) }
     }
@@ -239,12 +249,13 @@ private fun ColumnaAcciones(
 private fun BotonLateral(
     rotulo: String,
     acento: Color,
+    lado: Dp,
     onClick: () -> Unit,
     dibujo: DrawScope.(Color) -> Unit,
 ) {
     Box(
         modifier = Modifier
-            .size(ANCHO_BOTON)
+            .size(lado)
             .clip(RoundedCornerShape(10.dp))
             .background(if (acento == Neon.TextMuted) Neon.Surface else acento.copy(alpha = 0.16f))
             .border(1.dp, if (acento == Neon.TextMuted) Neon.Outline else acento,
@@ -252,7 +263,7 @@ private fun BotonLateral(
             .pointerInput(Unit) { detectTapGestures { onClick() } },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(ANCHO_BOTON * 0.55f)) { dibujo(acento) }
+        Canvas(modifier = Modifier.size(lado * 0.55f)) { dibujo(acento) }
     }
 
     Spacer(Modifier.height(5.dp))
@@ -307,6 +318,7 @@ private fun DrawScope.dibujarEscudo(color: Color) {
 private fun SliderAlcance(
     alcanceCm: Int,
     onAlcance: (Int) -> Unit,
+    ancho: Dp,
     alto: Dp,
 ) {
     /* Los valores se redondean a decenas. Un alcance de 137 cm no significa nada para
@@ -329,7 +341,7 @@ private fun SliderAlcance(
 
         Canvas(
             modifier = Modifier
-                .width(ANCHO_SLIDER)
+                .width(ancho)
                 .height(alto - 26.dp)
                 .pointerInput(Unit) {
                     detectTapGestures { desdeY(it.y, size.height.toFloat()) }
@@ -518,8 +530,6 @@ private fun DrawScope.dibujarAguja(grados: Int, origen: Offset, radio: Float) {
     )
 }
 
-private val ANCHO_SLIDER = 26.dp
-private val ANCHO_BOTON = 34.dp
 
 /** Alcance util del HC-SR04, el mismo que declara el firmware. */
 private const val ALCANCE_MAX = 250f

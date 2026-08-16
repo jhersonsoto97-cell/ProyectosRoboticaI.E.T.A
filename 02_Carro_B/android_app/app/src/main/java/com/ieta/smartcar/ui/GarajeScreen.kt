@@ -68,7 +68,7 @@ fun GarajeScreen(
             )
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val altoTarjeta = (maxHeight * 0.70f).coerceIn(190.dp, 340.dp)
+            val altoTarjeta = (maxHeight * 0.70f).coerceIn(190.dp, 460.dp)
             val anchoTarjeta = altoTarjeta * 0.78f
 
             // Un solo tamano de nombre para las dos tarjetas, calculado con el mas largo.
@@ -88,7 +88,7 @@ fun GarajeScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(start = 18.dp, top = 14.dp)
-                    .height((maxHeight * 0.15f).coerceIn(40.dp, 64.dp))
+                    .height((maxHeight * 0.15f).coerceIn(40.dp, 96.dp))
                     .alpha(0.9f)
             )
 
@@ -98,7 +98,7 @@ fun GarajeScreen(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(end = 18.dp, top = 22.dp)
-                    .height((maxHeight * 0.09f).coerceIn(24.dp, 40.dp))
+                    .height((maxHeight * 0.09f).coerceIn(24.dp, 64.dp))
             )
 
             Column(

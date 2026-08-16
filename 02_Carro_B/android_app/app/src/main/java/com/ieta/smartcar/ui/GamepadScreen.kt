@@ -116,7 +116,15 @@ fun GamepadScreen(
             // El stick se dimensiona contra el alto util: en landscape esa es la
             // dimension escasa y asi la interfaz aguanta desde un telefono chico
             // hasta una tablet sin recortarse.
-            val stickDiameter = (maxHeight * 0.52f).coerceIn(150.dp, 260.dp)
+            //
+            // El techo llega a 380 y no a 260 por las tablets. Con 260, en una pantalla
+            // de diez pulgadas los sticks quedaban del tamano de los de un telefono,
+            // perdidos en un mar de espacio vacio. Ese tope se agarra recien pasando los
+            // 730 dp de alto, asi que en telefono no cambia nada.
+            //
+            // Y no mas de 380: los dos sticks y la fila de botones comparten el ancho, y
+            // creciendo mas se pisan entre ellos.
+            val stickDiameter = (maxHeight * 0.52f).coerceIn(150.dp, 380.dp)
 
             TopBar(
                 carro = viewModel.carro,
@@ -141,7 +149,7 @@ fun GamepadScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(top = maxHeight * 0.17f, start = 18.dp)
-                    .height((maxHeight * 0.21f).coerceIn(58.dp, 96.dp))
+                    .height((maxHeight * 0.21f).coerceIn(58.dp, 140.dp))
                     .alpha(0.9f)
             )
 
@@ -169,7 +177,7 @@ fun GamepadScreen(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = maxHeight * 0.215f, end = 18.dp)
-                    .height((maxHeight * 0.12f).coerceIn(32.dp, 52.dp))
+                    .height((maxHeight * 0.12f).coerceIn(32.dp, 80.dp))
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { showSocial = true }
             )
@@ -234,7 +242,7 @@ fun GamepadScreen(
                     escudoActivo = viewModel.escudoActivo,
                     escudoFrenando = viewModel.escudoFrenando,
                     onEscudo = viewModel::alternarEscudo,
-                    ancho = minOf(porAlto, porAncho).coerceIn(190.dp, 330.dp),
+                    ancho = minOf(porAlto, porAncho).coerceIn(190.dp, 520.dp),
                     // Colgado de la barra y no centrado: centrado dejaba un hueco muerto
                     // arriba, y ese hueco es justo lo que le faltaba de tamano.
                     modifier = Modifier

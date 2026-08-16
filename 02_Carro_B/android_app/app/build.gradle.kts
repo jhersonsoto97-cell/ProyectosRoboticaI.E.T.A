@@ -22,8 +22,8 @@ android {
         applicationId = "com.ieta.smartcar"
         minSdk = 24
         targetSdk = 34
-        versionCode = 28
-        versionName = "3.6"
+        versionCode = 29
+        versionName = "3.7"
     }
 
     signingConfigs {
