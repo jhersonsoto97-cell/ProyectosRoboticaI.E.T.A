@@ -199,7 +199,9 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         private set
 
     /** Cuanto mas debe recorrer el dedo respecto del circulo dibujado, en porcentaje. */
-    var stickTravel by mutableStateOf(prefs.getInt(KEY_STICK_TRAVEL, DEFAULT_TRAVEL))
+    var stickTravel by mutableStateOf(
+        prefs.getInt(KEY_STICK_TRAVEL, DEFAULT_TRAVEL).coerceIn(TRAVEL_MIN, TRAVEL_MAX)
+    )
         private set
 
     /**
@@ -307,10 +309,7 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun adjustStickTravel(delta: Int) {
-        // El tope es 200 porque los sticks van pegados a las esquinas: mas recorrido que
-        // ese no cabe entre el centro del stick y el borde de la pantalla, y el tope del
-        // rango quedaria fuera del alcance del dedo.
-        stickTravel = (stickTravel + delta).coerceIn(100, 200)
+        stickTravel = (stickTravel + delta).coerceIn(TRAVEL_MIN, TRAVEL_MAX)
         prefs.edit().putInt(KEY_STICK_TRAVEL, stickTravel).apply()
     }
 
@@ -607,8 +606,22 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         const val DEFAULT_STEER_EXPO = 60
         const val DEFAULT_AUTHORITY = 65
 
-        /** 150 %: con el circulo dibujado solo, un pulgar grueso barre todo el rango. */
-        const val DEFAULT_TRAVEL = 150
+        /**
+         * Recorrido del dedo respecto del circulo dibujado.
+         *
+         * Por debajo de 100 el dedo llega al tope antes del borde, y por encima tiene que
+         * pasarse. Un telefono pide de mas porque el circulo es chico y un pulgar grueso
+         * lo barre entero; una tablet pide de menos, porque el circulo ya es grande y
+         * estirar el pulgar hasta ahi cansa.
+         *
+         * El maximo baja de 200 a 150: mas alla de eso el borde util queda fuera del
+         * alcance del pulgar en cualquiera de los dos, asi que era rango que no servia.
+         */
+        const val TRAVEL_MIN = 50
+        const val TRAVEL_MAX = 150
+
+        /** Punto neutro: el dedo llega al tope justo en el borde dibujado. */
+        const val DEFAULT_TRAVEL = 100
 
         const val KEY_THROTTLE_EXPO = "throttle_expo"
         const val KEY_STEER_EXPO = "steer_expo"

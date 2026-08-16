@@ -538,7 +538,7 @@ private fun CalibrationDialog(
                 // aqui solo estorbaria entre el usuario y los botones.
                 SectionLabel("SENSIBILIDAD")
                 TrimRow("RECORRIDO DEL STICK", stickTravel, Neon.Ok, onAdjustTravel)
-                Hint("Mas alto, hay que mover mas el dedo para el mismo efecto.")
+                Hint("100 llega al tope en el borde. Menos, antes; mas, hay que pasarse.")
 
                 Spacer(Modifier.height(10.dp))
                 TrimRow("SUAVIDAD ACELERADOR", throttleExpo, Neon.Cyan, onAdjustThrottleExpo)
