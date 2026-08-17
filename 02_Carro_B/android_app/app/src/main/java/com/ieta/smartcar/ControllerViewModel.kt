@@ -31,12 +31,15 @@ import com.ieta.smartcar.protocolo.EcoRadar
 import com.ieta.smartcar.protocolo.EventoCarro
 import com.ieta.smartcar.protocolo.OrdenCarro
 import com.ieta.smartcar.protocolo.Protocolo
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 
 /**
  * Dueno del estado de control. Mantiene un lazo fijo de 20 Hz que transmite la posicion
@@ -188,6 +191,27 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     private var lastTrimSent = 0L
     private var ultimoCentradoEnviado = 0L
 
+    /**
+     * Compensacion de marcha recta, en puntos de recorte sobre la rueda que corre mas.
+     *
+     * Positivo corrige hacia la derecha, negativo hacia la izquierda, cero es sin
+     * compensar. Un solo numero y no dos trims sueltos: con dos es facil bajar los dos a
+     * la vez, que solo deja el carro mas lento y sigue torcido igual.
+     *
+     * No se guarda en disco a proposito. Depende de los motores del carro y no del
+     * telefono, asi que el que manda es el carro: la app lo lee al conectarse. Si cada
+     * tablet guardara el suyo, la primera en conectarse le impondria su calibracion a
+     * un carro que quiza ya estaba bien ajustado.
+     */
+    var balanceRecto by mutableStateOf(0); private set
+
+    /** Recorte de cada rueda que sale del balance. La que no se toca queda en 100. */
+    val trimRectoIzquierda: Int get() = if (balanceRecto < 0) 100 + balanceRecto else 100
+    val trimRectoDerecha: Int get() = if (balanceRecto > 0) 100 - balanceRecto else 100
+
+    private var ultimoTrimRectoEnviado = 0L
+    private var reenviarTrimRectoHasta = 0L
+
     // Sensibilidad del mando, en porcentaje para poder mostrarla y ajustarla con enteros.
     // A diferencia del trim, no viaja al carro: se aplica aqui, sobre la posicion del
     // stick, antes de calcular la potencia.
@@ -298,6 +322,19 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         lastTrimSent = 0L
     }
 
+    /** Positivo endereza a un carro que se va a la izquierda, y al reves. */
+    fun ajustarBalanceRecto(delta: Int) {
+        balanceRecto = (balanceRecto + delta).coerceIn(-BALANCE_MAX, BALANCE_MAX)
+
+        // Se reenvia un rato en vez de una sola vez. El canal de escritura es CONFLATED,
+        // asi que un envio suelto puede quedar pisado por la trama de conduccion
+        // siguiente y perderse sin que nadie se entere. Y en vez de repetirlo para
+        // siempre, se corta solo: repetirlo sin fin haria que dos tablets sobre el mismo
+        // carro se pisaran la calibracion todo el tiempo.
+        reenviarTrimRectoHasta = System.currentTimeMillis() + INSISTIR_TRIM_MS
+        ultimoTrimRectoEnviado = 0L
+    }
+
     fun adjustThrottleExpo(delta: Int) {
         throttleExpo = (throttleExpo + delta).coerceIn(0, 90)
         prefs.edit().putInt(KEY_THROTTLE_EXPO, throttleExpo).apply()
@@ -379,6 +416,15 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
         connectJob?.cancel()
         switchTo(websocket)
         websocket.connectTo()
+
+        connectJob = viewModelScope.launch {
+            val enlazado = withTimeoutOrNull(PLAZO_CALIBRACION_MS) {
+                websocket.state.first { it == LinkState.CONNECTED }
+            }
+            if (enlazado != null) {
+                leerCalibracionDelCarro()
+            }
+        }
     }
 
     fun connectSimulator(endpoint: String) {
@@ -520,7 +566,46 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
+        // La compensacion de marcha recta solo ocupa un tick mientras se la esta
+        // corrigiendo. Fuera de esa ventana no se manda nada: la guarda el carro, y
+        // repetirsela sin motivo seria pisar la de quien la haya ajustado despues.
+        if (ahora < reenviarTrimRectoHasta &&
+            ahora - ultimoTrimRectoEnviado >= TRIM_RECTO_PERIOD_MS
+        ) {
+            val recto = protocolo.codificar(
+                OrdenCarro.TrimRecto(trimRectoIzquierda, trimRectoDerecha)
+            )
+            if (recto != null) {
+                ultimoTrimRectoEnviado = ahora
+                link.send(recto)
+                return
+            }
+        }
+
         protocolo.codificar(OrdenCarro.Conducir(power.left, power.right))?.let { link.send(it) }
+    }
+
+    /**
+     * Adopta la compensacion que el carro trae guardada.
+     *
+     * Se lee al conectarse y no se guarda nada en el telefono. Con varias tablets sobre
+     * el mismo carro, esto es lo que hace que todas vean el mismo valor en vez de que
+     * cada una arranque en cero y lo pise apenas alguien toque un boton.
+     *
+     * Falla en silencio: es un dato de conveniencia. Si el carro no contesta, el mando
+     * funciona igual y el peor caso es que el numero en pantalla arranque en cero.
+     */
+    private suspend fun leerCalibracionDelCarro() {
+        val url = carro.ajustesUrl ?: return
+        val cuerpo = withContext(Dispatchers.IO) { redWifi.leerTexto(url) } ?: return
+
+        val json = runCatching { JSONObject(cuerpo) }.getOrNull() ?: return
+        if (!json.has("trim_izquierda") || !json.has("trim_derecha")) {
+            return
+        }
+
+        balanceRecto = (json.optInt("trim_izquierda", 100) - json.optInt("trim_derecha", 100))
+            .coerceIn(-BALANCE_MAX, BALANCE_MAX)
     }
 
     /**
@@ -569,6 +654,30 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
         const val TRIM_PERIOD_MS = 1000L
         const val CENTRADO_PERIOD_MS = 1000L
+
+        /**
+         * Compensacion de marcha recta: cuanto se insiste y cada cuanto.
+         *
+         * Tres segundos a 300 ms son unos diez envios por cada toque, de sobra para que
+         * uno llegue aunque el canal conflado se coma varios. Despues calla: el valor ya
+         * quedo en la memoria del carro y seguir repitiendolo solo serviria para pisar
+         * a quien lo ajuste desde otra tablet.
+         */
+        const val TRIM_RECTO_PERIOD_MS = 300L
+        const val INSISTIR_TRIM_MS = 3000L
+
+        /**
+         * Tope del balance, en puntos de recorte.
+         *
+         * Cincuenta es mucho mas de lo que un desbalance normal necesita: entre motores
+         * de la misma tanda no pasa de diez o quince. Que haga falta mas es senal de una
+         * falla mecanica, y ahi compensar por software tapa el problema en vez de
+         * resolverlo, asi que el tope tambien sirve de aviso.
+         */
+        const val BALANCE_MAX = 50
+
+        /** Lo que se espera al enlace antes de rendirse a leer la calibracion del carro. */
+        const val PLAZO_CALIBRACION_MS = 8000L
 
         /** Medio cono de avance. Fuera de el, el carro pasa de largo. */
         const val CONO_FRONTAL_GRADOS = 45

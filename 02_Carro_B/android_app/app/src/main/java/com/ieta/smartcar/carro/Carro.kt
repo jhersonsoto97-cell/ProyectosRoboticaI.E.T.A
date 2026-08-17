@@ -23,6 +23,8 @@ enum class TipoCarro { CARRO_B, EXPLORADOR }
 data class Capacidades(
     /** Compensacion de reversa que se calibra desde la app y viaja al carro. */
     val trimsReversa: Boolean = false,
+    /** Compensacion de marcha recta, guardada en el carro y editable desde la app. */
+    val trimRecto: Boolean = false,
     /** Manda ecos de sonar mientras se maneja. */
     val radar: Boolean = false,
     /** Puede levantar un plano del entorno estando quieto. */
@@ -42,6 +44,8 @@ data class Carro(
     val red: String? = null,
     val clave: String? = null,
     val panelUrl: String? = null,
+    /** De donde leer la calibracion que el carro tiene guardada, si la publica. */
+    val ajustesUrl: String? = null,
 )
 
 object Garaje {
@@ -61,10 +65,16 @@ object Garaje {
         cerebro = "ESP32",
         medio = "WiFi propio",
         protocolo = ProtocoloEsp32,
-        capacidades = Capacidades(radar = true, escaneo = true, panelPropio = true),
+        capacidades = Capacidades(
+            trimRecto = true,
+            radar = true,
+            escaneo = true,
+            panelPropio = true
+        ),
         red = "SmartCar-03",
         clave = "explorador",
         panelUrl = "http://192.168.4.1/diag",
+        ajustesUrl = "http://192.168.4.1/ajustes",
     )
 
     val todos = listOf(CARRO_B, EXPLORADOR)

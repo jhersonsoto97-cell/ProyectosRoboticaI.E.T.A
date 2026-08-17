@@ -17,6 +17,15 @@ package com.ieta.smartcar.protocolo
 sealed interface OrdenCarro {
     data class Conducir(val izquierda: Int, val derecha: Int) : OrdenCarro
     data class TrimReversa(val izquierda: Int, val derecha: Int) : OrdenCarro
+
+    /**
+     * Compensacion de marcha recta: recorte del techo de cada rueda, en porcentaje.
+     *
+     * A diferencia de la de reversa, esta vive en el carro y no en la app. Es una
+     * propiedad de sus motores, no de quien lo maneja, y con varias tablets sobre el
+     * mismo carro la que la guardara en su disco se la impondria a las demas.
+     */
+    data class TrimRecto(val izquierda: Int, val derecha: Int) : OrdenCarro
     data object Detener : OrdenCarro
     data object Escanear : OrdenCarro
 

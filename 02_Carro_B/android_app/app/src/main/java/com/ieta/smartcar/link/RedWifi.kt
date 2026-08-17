@@ -13,7 +13,9 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.net.HttpURLConnection
 import java.net.Socket
+import java.net.URL
 
 /**
  * Union a la red que levanta el carro.
@@ -184,6 +186,30 @@ class RedWifi(private val context: Context) {
     fun atar(socket: Socket) {
         (red ?: redWifiDelSistema())?.let { runCatching { it.bindSocket(socket) } }
     }
+
+    /**
+     * Lee una direccion del carro por HTTP, saliendo por la WiFi.
+     *
+     * La conexion se abre desde el objeto Network por la misma razon que se atan los
+     * sockets: pedida al sistema, saldria por datos moviles y no llegaria nunca.
+     *
+     * Devuelve null ante cualquier tropiezo en vez de propagar. Quien llama esta
+     * consultando un dato de conveniencia mientras se conecta, y que la app se caiga
+     * porque el carro tardo en contestar seria mucho peor que no tener el dato.
+     */
+    fun leerTexto(url: String, plazoMs: Int = 2000): String? = runCatching {
+        val destino = (red ?: redWifiDelSistema()) ?: return null
+
+        val conexion = destino.openConnection(URL(url)) as HttpURLConnection
+        conexion.connectTimeout = plazoMs
+        conexion.readTimeout = plazoMs
+        try {
+            if (conexion.responseCode != HttpURLConnection.HTTP_OK) return null
+            conexion.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            conexion.disconnect()
+        }
+    }.getOrNull()
 
     /**
      * Si el telefono tiene alguna WiFi levantada, sin importar cual.

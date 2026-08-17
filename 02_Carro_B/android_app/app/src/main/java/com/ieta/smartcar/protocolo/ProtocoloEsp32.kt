@@ -21,9 +21,11 @@ object ProtocoloEsp32 : Protocolo {
         OrdenCarro.Escanear -> """{"t":"scan"}"""
         is OrdenCarro.CentrarServo ->
             """{"t":"centrar","v":${if (orden.activo) 1 else 0}}"""
+        is OrdenCarro.TrimRecto ->
+            """{"t":"trim","l":${orden.izquierda},"r":${orden.derecha}}"""
 
-        /* La compensacion de reversa la resuelve este carro con sus propios trims,
-         * guardados en su memoria y ajustables desde su panel. */
+        /* Este carro compensa la reversa con el mismo recorte que usa para el avance,
+         * asi que no hay una trama aparte que mandarle. */
         is OrdenCarro.TrimReversa -> null
 
         /* Las pruebas de hardware van por HTTP a /probar y no por el socket: son

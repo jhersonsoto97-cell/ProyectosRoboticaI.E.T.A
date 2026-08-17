@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ieta.smartcar.ControllerViewModel
+import com.ieta.smartcar.carro.Capacidades
 import com.ieta.smartcar.carro.Carro
 import com.ieta.smartcar.R
 import com.ieta.smartcar.control.DriveMode
@@ -199,47 +200,19 @@ fun GamepadScreen(
             // Tocandolo se abren las redes del autor. Es el unico control de la pantalla
             // sin rotulo, y esta bien asi: nadie lo va a pulsar sin querer mientras maneja
             // porque queda fuera del alcance de los pulgares.
+            // Se destaca por tamano y no por efectos: sin fondo, sin resplandor y sin
+            // recuadro. Un halo detras lo ensuciaba en vez de resaltarlo, y ademas metia
+            // color de la paleta en una zona que estaba limpia.
             val altoMarca = (maxHeight * 0.15f).coerceIn(38.dp, 120.dp)
-
-            // Un halo detras. El escudo es a todo color y gana la mirada solo; el wordmark
-            // es trazo blanco sobre fondo casi negro y compite en desventaja. El resplandor
-            // le da cuerpo sin tocar la paleta ni ponerle un recuadro que lo encajone.
-            //
-            // El halo entra en la caja y no alrededor, asi que la caja mide mas que la
-            // imagen por todos lados y hay que descontarlo al ubicarla; si no, el logo
-            // arranca una aureola mas abajo y mas adentro que el escudo.
-            val aureola = altoMarca * 0.24f
-            Box(
+            Image(
+                painter = painterResource(R.drawable.ic_brand),
+                contentDescription = "Redes del autor",
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(
-                        top = (topeLogos - aureola).coerceAtLeast(0.dp),
-                        end = (18.dp - aureola).coerceAtLeast(4.dp)
-                    )
-                    .clip(RoundedCornerShape(50))
-                    .background(
-                        // Tres paradas y no dos: con solo el centro y el borde, el
-                        // degradado se estira parejo y sale una nube difusa. Metiendo
-                        // una parada intermedia baja rapido y queda un resplandor
-                        // pegado al trazo, que es lo que resalta sin ensuciar el fondo.
-                        Brush.radialGradient(
-                            listOf(
-                                Neon.Cyan.copy(alpha = 0.30f),
-                                Neon.Cyan.copy(alpha = 0.08f),
-                                Color.Transparent
-                            )
-                        )
-                    )
+                    .padding(top = topeLogos, end = 18.dp)
+                    .height(altoMarca)
                     .clickable { showSocial = true }
-                    .padding(aureola),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_brand),
-                    contentDescription = "Redes del autor",
-                    modifier = Modifier.height(altoMarca)
-                )
-            }
+            )
 
             // Los sticks van anclados a las esquinas de abajo y no centrados a media
             // altura: sosteniendo el telefono con las dos manos, los pulgares descansan
@@ -421,8 +394,10 @@ fun GamepadScreen(
 
     if (showCalibration) {
         CalibrationDialog(
+            capacidades = viewModel.carro.capacidades,
             trimLeft = viewModel.reverseTrimLeft,
             trimRight = viewModel.reverseTrimRight,
+            balanceRecto = viewModel.balanceRecto,
             throttleExpo = viewModel.throttleExpo,
             steerExpo = viewModel.steerExpo,
             steerAuthority = viewModel.steerAuthority,
@@ -430,6 +405,7 @@ fun GamepadScreen(
             echo = trimEcho,
             onAdjustLeft = viewModel::adjustReverseTrimLeft,
             onAdjustRight = viewModel::adjustReverseTrimRight,
+            onAdjustBalance = viewModel::ajustarBalanceRecto,
             onAdjustThrottleExpo = viewModel::adjustThrottleExpo,
             onAdjustSteerExpo = viewModel::adjustSteerExpo,
             onAdjustAuthority = viewModel::adjustSteerAuthority,
@@ -536,16 +512,21 @@ private fun SocialTile(
 }
 
 /**
- * Ajuste de la compensacion de reversa sin recompilar.
+ * Ajustes del mando sin recompilar.
  *
- * Solo la reversa: el avance ya quedo calibrado y exponerlo aqui invitaria a desajustarlo
- * sin querer. La ventana se puede dejar abierta mientras se maneja, que es justamente
- * como conviene calibrar, probando y corrigiendo sobre la marcha.
+ * La ventana se puede dejar abierta mientras se maneja, que es justamente como conviene
+ * calibrar: probando y corrigiendo sobre la marcha.
+ *
+ * Cada compensacion aparece solo en el carro que la entiende. Mostrarlas todas siempre
+ * dejaba controles que no hacian nada, y un control que no responde se lee como una
+ * falla de la app.
  */
 @Composable
 private fun CalibrationDialog(
+    capacidades: Capacidades,
     trimLeft: Int,
     trimRight: Int,
+    balanceRecto: Int,
     throttleExpo: Int,
     steerExpo: Int,
     steerAuthority: Int,
@@ -553,6 +534,7 @@ private fun CalibrationDialog(
     echo: String?,
     onAdjustLeft: (Int) -> Unit,
     onAdjustRight: (Int) -> Unit,
+    onAdjustBalance: (Int) -> Unit,
     onAdjustThrottleExpo: (Int) -> Unit,
     onAdjustSteerExpo: (Int) -> Unit,
     onAdjustAuthority: (Int) -> Unit,
@@ -585,23 +567,33 @@ private fun CalibrationDialog(
                 TrimRow("FUERZA DE GIRO", steerAuthority, Neon.Warning, onAdjustAuthority)
                 Hint("Mas bajo, curvas mas abiertas. Mas alto, gira sobre su eje.")
 
-                Spacer(Modifier.height(18.dp))
-                SectionLabel("COMPENSACION DE REVERSA")
-                TrimRow("RUEDA IZQUIERDA", trimLeft, Neon.Cyan, onAdjustLeft)
-                Spacer(Modifier.height(10.dp))
-                TrimRow("RUEDA DERECHA", trimRight, Neon.Blue, onAdjustRight)
-                Hint("Recorta la rueda que corre mas al retroceder. No afecta el avance.")
+                if (capacidades.trimRecto) {
+                    Spacer(Modifier.height(18.dp))
+                    SectionLabel("MARCHA RECTA")
+                    BalanceRow(balanceRecto, onAdjustBalance)
+                    Hint("Si se va a la izquierda, subilo. Probalo a fondo: despacio casi no se nota.")
+                    Hint("Queda guardado en el carro, no en esta tablet.")
+                }
 
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = if (echo != null) {
-                        "Carro confirma: $echo"
-                    } else {
-                        "Esperando confirmacion del carro..."
-                    },
-                    color = if (echo != null) Neon.Ok else Neon.TextMuted,
-                    fontSize = 10.sp
-                )
+                if (capacidades.trimsReversa) {
+                    Spacer(Modifier.height(18.dp))
+                    SectionLabel("COMPENSACION DE REVERSA")
+                    TrimRow("RUEDA IZQUIERDA", trimLeft, Neon.Cyan, onAdjustLeft)
+                    Spacer(Modifier.height(10.dp))
+                    TrimRow("RUEDA DERECHA", trimRight, Neon.Blue, onAdjustRight)
+                    Hint("Recorta la rueda que corre mas al retroceder. No afecta el avance.")
+
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = if (echo != null) {
+                            "Carro confirma: $echo"
+                        } else {
+                            "Esperando confirmacion del carro..."
+                        },
+                        color = if (echo != null) Neon.Ok else Neon.TextMuted,
+                        fontSize = 10.sp
+                    )
+                }
             }
         },
         confirmButton = {
@@ -610,6 +602,58 @@ private fun CalibrationDialog(
             }
         }
     )
+}
+
+/**
+ * Compensacion de marcha recta: un solo numero con signo, no dos trims sueltos.
+ *
+ * Debajo del numero se dice que rueda se esta recortando y en cuanto. El signo por si
+ * solo no le dice nada a nadie, y sin ese renglon habria que adivinar si un valor
+ * positivo frena una rueda o acelera la otra.
+ */
+@Composable
+private fun BalanceRow(balance: Int, onAdjust: (Int) -> Unit) {
+    val accent = if (balance == 0) Neon.Ok else Neon.Warning
+
+    Column {
+        Text(
+            text = "DESVIO AL ACELERAR",
+            color = accent.copy(alpha = 0.8f),
+            fontSize = 10.sp,
+            letterSpacing = 1.5.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            StepButton("-5", accent) { onAdjust(-5) }
+            StepButton("-1", accent) { onAdjust(-1) }
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = if (balance > 0) "+$balance" else "$balance",
+                    color = Neon.TextPrimary,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = when {
+                        balance > 0 -> "frena DER a ${100 - balance}%"
+                        balance < 0 -> "frena IZQ a ${100 + balance}%"
+                        else -> "sin compensar"
+                    },
+                    color = Neon.TextMuted,
+                    fontSize = 9.sp
+                )
+            }
+
+            StepButton("+1", accent) { onAdjust(1) }
+            StepButton("+5", accent) { onAdjust(5) }
+        }
+    }
 }
 
 @Composable

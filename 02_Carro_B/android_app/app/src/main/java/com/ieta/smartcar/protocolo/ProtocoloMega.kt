@@ -19,6 +19,9 @@ object ProtocoloMega : Protocolo {
         /* Este carro no tiene sonar. */
         OrdenCarro.Escanear -> null
         is OrdenCarro.CentrarServo -> null
+
+        /* Ni compensacion de marcha recta: su firmware solo recorta la reversa. */
+        is OrdenCarro.TrimRecto -> null
     }
 
     /* El Mega manda lineas de texto pensadas para que las lea una persona, no un
