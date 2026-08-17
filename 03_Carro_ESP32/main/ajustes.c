@@ -137,6 +137,15 @@ bool ajustes_fijar(const char *clave, int valor) {
 
         const int16_t recortado = recortar((int16_t)valor,
                                            CAMPOS[i].minimo, CAMPOS[i].maximo);
+
+        /* Fijar el valor que ya estaba no escribe la flash. Un ajuste que se
+         * corrige desde el mando llega muchas veces seguidas, y cada escritura
+         * gasta un ciclo de NVS aunque no cambie nada. Salir aca tambien deja
+         * pasar sin costo a quien reenvie su estado al reconectarse. */
+        if (*campo_en(&CAMPOS[i]) == recortado) {
+            return true;
+        }
+
         *campo_en(&CAMPOS[i]) = recortado;
 
         /* El servo no admite que los topes se crucen: cambiarlos por separado

@@ -105,6 +105,23 @@ static void manejar_mensaje(const char *texto) {
         int activo = 0;
         leer_entero(texto, "v", &activo);
         sonar_centrar(activo != 0);
+        return;
+    }
+
+    /* Compensacion de marcha recta. Va por el socket y no por /ajustar para poder
+     * corregirla sin soltar el mando: el desvio solo se ve con el carro andando a
+     * fondo, y salir a un navegador entre intento e intento pierde la referencia.
+     *
+     * Cada lado se fija por separado y no hace falta que vengan los dos: la app
+     * manda solo el que movio. */
+    if (tiene_tipo(texto, "trim")) {
+        int valor = 0;
+        if (leer_entero(texto, "l", &valor)) {
+            ajustes_fijar("trim_izquierda", valor);
+        }
+        if (leer_entero(texto, "r", &valor)) {
+            ajustes_fijar("trim_derecha", valor);
+        }
     }
 }
 

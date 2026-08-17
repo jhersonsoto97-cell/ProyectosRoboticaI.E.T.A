@@ -288,6 +288,8 @@ esperando el eco, y ese tiempo no puede robarselo al servidor ni al lazo de cont
 navegador -> carro   {"t":"c","l":-255..255,"r":-255..255}
                      {"t":"scan"}
                      {"t":"stop"}
+                     {"t":"centrar","v":0|1}
+                     {"t":"trim","l":10..100,"r":10..100}
 
 carro -> navegador   {"t":"s","a":grados,"d":cm}
                      {"t":"p","v":0..100}
@@ -302,6 +304,40 @@ siempre en el marco del carro.
 El navegador transmite cada 50 ms aunque los sticks no cambien: ese flujo constante es
 lo que alimenta el failsafe, de modo que una caida de WiFi o un navegador que se cierra
 terminan en parada y no en un carro descontrolado.
+
+`trim` es la unica trama que deja algo escrito en la memoria del carro. Se manda solo
+mientras alguien esta corrigiendo el desvio, no en cada tick: `ajustes_fijar` ignora el
+valor que ya estaba, asi que reenviarlo no gasta ciclos de flash, pero repetirlo sin
+motivo pisaria la calibracion de quien la ajuste desde otro mando.
+
+## Marcha recta
+
+Dos motores de la misma tanda no giran igual. Con los dos al maximo el carro describe
+una curva abierta, mas notoria cuanto mas rapido va, y a fondo se le nota clarito.
+
+Se corrige recortando el techo de PWM de la rueda que corre mas, con `trim_izquierda` y
+`trim_derecha` (10..100, de fabrica 100). El recorte va al techo y no a la salida final:
+recortar al final empujaria los valores bajos por debajo del piso de torque y el motor
+compensado se quedaria quieto justo donde mas falta hace la precision.
+
+Por como esta armado, la correccion vale cero en el arranque y crece con el acelerador,
+que es como se comporta el desbalance real entre dos motores.
+
+Como encontrar el valor:
+
+1. Antes de compensar, descartar la mecanica. Levantar el carro, correr la prueba de
+   motores del panel, mirar si una rueda va visiblemente mas lenta, que ninguna roce y
+   que la bateria este cargada. Compensar sobre una falla mecanica la tapa.
+2. Marcar unos 4 m de recta y acelerar **a fondo**, sin tocar la direccion.
+3. Si se va a la izquierda, bajar el trim de la rueda **derecha**; si se va a la
+   derecha, el de la izquierda. De a 5 primero, de a 1 al final.
+4. Suele quedar entre 85 y 95. Necesitar menos de 70 es senal de un problema mecanico.
+
+Se ajusta desde el panel `/diag` o, mas comodo, desde la ventana de ajustes de la app,
+que lo corrige sin soltar el mando. Queda guardado en NVS y sobrevive al corte de
+energia. Vive en el carro y no en el telefono a proposito: es una propiedad de sus
+motores, y con varias tablets sobre un mismo carro, la que lo guardara en su disco se lo
+impondria a las demas.
 
 ## Hardware
 
