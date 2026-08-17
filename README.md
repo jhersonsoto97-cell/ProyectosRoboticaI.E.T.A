@@ -32,7 +32,7 @@ Están numerados en orden de dificultad. Si es tu primera vez, empieza por el 01
 | | Qué hace | Qué vas a aprender | Se maneja |
 |---|---|---|---|
 | **[01 Seguidor](01_Seguidor_de_linea/)** | Sigue una línea negra por su cuenta | Sensores, lógica de decisión, control de motores | Solo, nadie lo maneja |
-| **[02 Carro B](02_Carro_B/)** | Lo manejas desde el celular | Bluetooth, comunicación entre dos aparatos | App, por Bluetooth |
+| **[02 Carro B](02_Carro_B/)** | Lo manejas desde el celular | Bluetooth, comunicación entre dos dispositivos | App, por Bluetooth |
 | **[03 Explorador](03_Carro_ESP32/)** | Crea su WiFi y dibuja lo que hay alrededor | Redes, sensores de distancia, servomotores | App o navegador, por WiFi |
 
 Los tres comparten el mismo chasis de dos ruedas y el mismo driver de motores
