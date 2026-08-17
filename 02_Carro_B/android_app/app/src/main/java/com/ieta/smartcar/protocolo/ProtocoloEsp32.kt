@@ -54,6 +54,8 @@ object ProtocoloEsp32 : Protocolo {
 
                 "p" -> listOf(EventoCarro.Progreso(json.optInt("v")))
 
+                "ocupado" -> listOf(EventoCarro.MandoOcupado)
+
                 "e" -> {
                     val arreglo = json.optJSONArray("pts")
                     val puntos = ArrayList<PuntoSonar>(arreglo?.length() ?: 0)

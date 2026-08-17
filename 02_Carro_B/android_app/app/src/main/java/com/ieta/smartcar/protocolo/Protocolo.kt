@@ -53,6 +53,16 @@ sealed interface EventoCarro {
     data class Lectura(val punto: PuntoSonar) : EventoCarro
     data class Progreso(val porcentaje: Int) : EventoCarro
     data class Plano(val puntos: List<PuntoSonar>) : EventoCarro
+
+    /**
+     * Otro mando tiene el control y este quedo de espectador.
+     *
+     * El carro lo repite mientras dure el rechazo, en vez de mandarlo una sola
+     * vez al empezar: asi la app puede darlo por terminado cuando dejan de
+     * llegar, sin necesidad de un aviso de "ya podes manejar" que se perderia
+     * si el paquete no llega.
+     */
+    data object MandoOcupado : EventoCarro
 }
 
 interface Protocolo {

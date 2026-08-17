@@ -212,6 +212,15 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
     private var ultimoTrimRectoEnviado = 0L
     private var reenviarTrimRectoHasta = 0L
 
+    /**
+     * Otro mando esta manejando este carro y aqui solo se mira.
+     *
+     * Sin esto, el carro simplemente no responde y la app parece rota. Es la
+     * situacion normal en un salon con una tablet por estudiante.
+     */
+    var mandoOcupado by mutableStateOf(false); private set
+    private var ultimoAvisoOcupado = 0L
+
     // Sensibilidad del mando, en porcentaje para poder mostrarla y ajustarla con enteros.
     // A diferencia del trim, no viaja al carro: se aplica aqui, sobre la posicion del
     // stick, antes de calcular la potencia.
@@ -495,6 +504,12 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
                 }
 
                 is EventoCarro.Progreso -> progresoEscaneo = evento.porcentaje
+
+                EventoCarro.MandoOcupado -> {
+                    mandoOcupado = true
+                    ultimoAvisoOcupado = System.currentTimeMillis()
+                }
+
                 is EventoCarro.Texto -> Unit
             }
         }
@@ -519,7 +534,17 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
         if (link.state.value != LinkState.CONNECTED) {
             alerta.silenciar()
+            mandoOcupado = false
             return
+        }
+
+        // El carro repite el aviso mientras dure el rechazo, asi que se da por
+        // terminado cuando dejan de llegar. Se espera mas de un periodo completo:
+        // con el plazo justo, un solo aviso perdido haria parpadear el cartel.
+        if (mandoOcupado &&
+            System.currentTimeMillis() - ultimoAvisoOcupado > VIGENCIA_OCUPADO_MS
+        ) {
+            mandoOcupado = false
         }
 
         // La alerta se evalua en este mismo tick y no en un temporizador aparte: un
@@ -678,6 +703,15 @@ class ControllerViewModel(application: Application) : AndroidViewModel(applicati
 
         /** Lo que se espera al enlace antes de rendirse a leer la calibracion del carro. */
         const val PLAZO_CALIBRACION_MS = 8000L
+
+        /**
+         * Cuanto vale un aviso de "otro tiene el mando" antes de darlo por vencido.
+         *
+         * El carro lo repite cada segundo. Con dos segundos y medio se tolera
+         * perder uno sin que el cartel parpadee, y el turno se ve libre enseguida
+         * cuando el otro suelta de verdad.
+         */
+        const val VIGENCIA_OCUPADO_MS = 2500L
 
         /** Medio cono de avance. Fuera de el, el carro pasa de largo. */
         const val CONO_FRONTAL_GRADOS = 45

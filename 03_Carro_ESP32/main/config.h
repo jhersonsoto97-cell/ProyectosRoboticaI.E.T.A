@@ -188,6 +188,19 @@
 #define WIFI_CANAL         1
 #define WIFI_MAX_CLIENTES  4
 
+/* Cuanto conserva el turno quien maneja, despues de su ultima orden.
+ *
+ * Los cuatro mandos que caben pueden mirar, pero solo uno conduce. Tres
+ * segundos son largos frente a los 50 ms con que el mando repite la orden
+ * mientras se maneja, asi que soltar el stick un instante no cede el turno;
+ * y son cortos frente a lo que tarda alguien en pasarle la tablet a otro. */
+#define PILOTO_PLAZO_MS    3000
+
+/* Cada cuanto se le recuerda a un espectador que otro tiene el mando. El
+ * mando insiste veinte veces por segundo: sin este freno, cada trama
+ * rechazada gastaria una respuesta para repetir lo mismo. */
+#define AVISO_OCUPADO_MS   1000
+
 /* Potencia de transmision, en unidades de 0.25 dBm. El rango va de 8 a 84, es
  * decir de 2 a 20 dBm.
  *

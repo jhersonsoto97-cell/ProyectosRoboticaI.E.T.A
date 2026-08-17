@@ -108,15 +108,24 @@ function conectar(){
       est.escaneando = false;
       document.getElementById("aviso").style.display = "none";
       est.escaneo = m.pts || [];
+    } else if (m.t === "ocupado"){
+      // Otro mando esta conduciendo y aqui solo se mira. El carro lo repite
+      // cada segundo mientras dure, asi que se anota la hora y el estado se
+      // apaga solo cuando dejan de llegar.
+      est.ocupado = performance.now();
     }
   };
 }
 
 function pintarEstado(){
+  // Un aviso que se vence solo: sin el, quedarse con el cartel puesto despues
+  // de que el otro solto el mando seria peor que no tenerlo.
+  const espectador = est.ocupado && (performance.now() - est.ocupado) < 2500;
+
   document.getElementById("led").style.background =
-    est.conectado ? "var(--ok)" : "var(--alerta)";
+    !est.conectado ? "var(--alerta)" : (espectador ? "var(--ambar)" : "var(--ok)");
   document.getElementById("estado").textContent =
-    est.conectado ? "ENLAZADO" : "SIN ENLACE";
+    !est.conectado ? "SIN ENLACE" : (espectador ? "OTRO MANDO" : "ENLAZADO");
 }
 
 // El envio es periodico y no por evento: ese flujo constante alimenta el
@@ -126,6 +135,10 @@ setInterval(() => {
   const m = mezclar(est.gas, est.giro);
   est.ws.send(JSON.stringify({t:"c", l:m.l, r:m.r}));
 }, 50);
+
+// El chip de estado se repinta solo porque el de espectador se vence por tiempo:
+// nadie manda un "ya podes manejar", se deduce de que dejen de llegar avisos.
+setInterval(pintarEstado, 500);
 
 // ---------- mezcla ----------
 // Curva expo: con respuesta lineal el tramo util del pulgar se gasta en la

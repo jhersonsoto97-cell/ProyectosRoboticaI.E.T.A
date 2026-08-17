@@ -11,6 +11,7 @@
 #include <stdlib.h>
 
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
@@ -20,11 +21,20 @@ static const char *TAG = "web";
 
 static httpd_handle_t servidor = NULL;
 
-/* Descriptores de los navegadores conectados. Se guardan para poder empujarles
+/* Descriptores de los mandos conectados. Se guardan para poder empujarles
  * telemetria: el servidor solo entrega el descriptor dentro de una peticion, y
  * el sonar publica fuera de toda peticion. */
-static int clientes[WIFI_MAX_CLIENTES];
+typedef struct {
+    int fd;
+    int64_t aviso_ocupado;  /* ultima vez que se le dijo que otro tiene el mando */
+} cliente_t;
+
+static cliente_t clientes[WIFI_MAX_CLIENTES];
 static int cantidad_clientes = 0;
+
+/* Quien tiene el control. Ver "Un solo piloto a la vez" mas abajo. */
+static int piloto = -1;
+static int64_t marca_piloto = 0;
 
 static volatile bool solicitud_escaneo = false;
 
@@ -33,22 +43,100 @@ static volatile bool solicitud_escaneo = false;
  * ------------------------------------------------------------ */
 static void agregar_cliente(int fd) {
     for (int i = 0; i < cantidad_clientes; ++i) {
-        if (clientes[i] == fd) {
+        if (clientes[i].fd == fd) {
             return;
         }
     }
     if (cantidad_clientes < WIFI_MAX_CLIENTES) {
-        clientes[cantidad_clientes++] = fd;
+        clientes[cantidad_clientes].fd = fd;
+        clientes[cantidad_clientes].aviso_ocupado = 0;
+        cantidad_clientes++;
     }
 }
 
 static void quitar_cliente(int fd) {
     for (int i = 0; i < cantidad_clientes; ++i) {
-        if (clientes[i] == fd) {
+        if (clientes[i].fd == fd) {
             clientes[i] = clientes[--cantidad_clientes];
+
+            /* Si el que se fue era el piloto, el mando queda libre en el acto en
+             * vez de esperar a que venza el plazo: ya no hay nadie a quien
+             * respetarle el turno. */
+            if (piloto == fd) {
+                piloto = -1;
+            }
             return;
         }
     }
+}
+
+static cliente_t *buscar_cliente(int fd) {
+    for (int i = 0; i < cantidad_clientes; ++i) {
+        if (clientes[i].fd == fd) {
+            return &clientes[i];
+        }
+    }
+    return NULL;
+}
+
+/* ------------------------------------------------------------
+ *   Un solo piloto a la vez
+ * ------------------------------------------------------------ */
+/**
+ * Decide si este mando puede dar ordenes, y toma el turno si esta libre.
+ *
+ * El punto de acceso admite cuatro mandos y hasta ahora los cuatro podian
+ * conducir. Con una tablet por estudiante eso no es una posibilidad remota sino
+ * lo que pasa siempre: dos se conectan al mismo carro y el carro tiembla entre
+ * dos pares de sticks. Desde afuera se ve como una falla del carro.
+ *
+ * El primero que manda una orden toma el turno. Los demas siguen recibiendo
+ * telemetria y ven el radar, pero sus ordenes se ignoran. El turno se suelta
+ * solo tras unos segundos de silencio, asi que pasar el mando es dejar de tocar
+ * los sticks: nadie tiene que desconectarse ni oprimir nada.
+ *
+ * Vale para toda orden y no solo para conducir. Escanear hace girar el carro,
+ * centrar mueve el brazo del sonar y el trim escribe la calibracion: si un
+ * espectador pudiera mandarlas, seguiria arruinandole la maniobra al que maneja.
+ */
+static bool tomar_el_mando(int fd) {
+    const int64_t ahora = esp_timer_get_time();
+    const int64_t plazo = (int64_t)PILOTO_PLAZO_MS * 1000;
+
+    if (piloto != fd) {
+        if (piloto != -1 && (ahora - marca_piloto) < plazo) {
+            return false;
+        }
+        piloto = fd;
+        ESP_LOGI(TAG, "mando %d toma el control", fd);
+    }
+
+    marca_piloto = ahora;
+    return true;
+}
+
+/** Le dice a un mando que otro tiene el control, sin repetirselo a cada trama. */
+static void avisar_ocupado(int fd) {
+    cliente_t *cliente = buscar_cliente(fd);
+    if (cliente == NULL) {
+        return;
+    }
+
+    /* El mando insiste veinte veces por segundo mientras el dedo este sobre el
+     * stick. Contestarle a cada trama seria gastar la radio en repetir lo mismo. */
+    const int64_t ahora = esp_timer_get_time();
+    if ((ahora - cliente->aviso_ocupado) < (int64_t)AVISO_OCUPADO_MS * 1000) {
+        return;
+    }
+    cliente->aviso_ocupado = ahora;
+
+    httpd_ws_frame_t trama;
+    memset(&trama, 0, sizeof(trama));
+    trama.type = HTTPD_WS_TYPE_TEXT;
+    trama.payload = (uint8_t *)"{\"t\":\"ocupado\"}";
+    trama.len = strlen("{\"t\":\"ocupado\"}");
+
+    httpd_ws_send_frame_async(servidor, fd, &trama);
 }
 
 /* ------------------------------------------------------------
@@ -77,7 +165,14 @@ static bool tiene_tipo(const char *origen, const char *valor) {
     return strstr(origen, patron) != NULL;
 }
 
-static void manejar_mensaje(const char *texto) {
+static void manejar_mensaje(const char *texto, int fd) {
+    /* Toda orden pasa primero por el turno. Un espectador recibe telemetria y ve
+     * el radar, pero no mueve nada. */
+    if (!tomar_el_mando(fd)) {
+        avisar_ocupado(fd);
+        return;
+    }
+
     if (tiene_tipo(texto, "c")) {
         int izquierda = 0;
         int derecha = 0;
@@ -261,7 +356,7 @@ static esp_err_t manejar_ws(httpd_req_t *req) {
 
     err = httpd_ws_recv_frame(req, &trama, trama.len);
     if (err == ESP_OK && trama.type == HTTPD_WS_TYPE_TEXT) {
-        manejar_mensaje((const char *)buffer);
+        manejar_mensaje((const char *)buffer, httpd_req_to_sockfd(req));
     }
 
     free(buffer);
@@ -285,9 +380,9 @@ void web_difundir(const char *texto) {
     /* Se recorre al reves porque un envio fallido saca al cliente del arreglo,
      * y recorrer hacia adelante saltearia al que ocupa su lugar. */
     for (int i = cantidad_clientes - 1; i >= 0; --i) {
-        if (httpd_ws_send_frame_async(servidor, clientes[i], &trama) != ESP_OK) {
-            ESP_LOGI(TAG, "cliente %d se fue", clientes[i]);
-            quitar_cliente(clientes[i]);
+        if (httpd_ws_send_frame_async(servidor, clientes[i].fd, &trama) != ESP_OK) {
+            ESP_LOGI(TAG, "cliente %d se fue", clientes[i].fd);
+            quitar_cliente(clientes[i].fd);
         }
     }
 }

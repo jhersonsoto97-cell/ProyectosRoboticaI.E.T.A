@@ -7,12 +7,19 @@
 
 <table>
 <tr>
-<td width="50%"><a href="01_Seguidor_de_linea/"><img src="01_Seguidor_de_linea/docs/carrito.jpg" alt="Carro seguidor de línea con Arduino Mega" width="100%"></a></td>
-<td width="50%"><a href="03_Carro_ESP32/"><img src="03_Carro_ESP32/docs/carro_explorador.jpg" alt="Carro explorador con ESP32, servo y sensor ultrasónico" width="100%"></a></td>
+<td width="33%" align="center"><a href="01_Seguidor_de_linea/"><img src="01_Seguidor_de_linea/docs/carrito.jpg" alt="Carro seguidor de línea con Arduino Mega" height="185"></a></td>
+<td width="33%" align="center"><a href="02_Carro_B/"><img src="docs/carro_b_tarjeta.jpg" alt="Carro B, controlado por Bluetooth" height="185"></a></td>
+<td width="33%" align="center"><a href="03_Carro_ESP32/"><img src="03_Carro_ESP32/docs/carro_explorador.jpg" alt="Carro explorador con ESP32, servo y sensor ultrasónico" height="185"></a></td>
 </tr>
 <tr>
 <td align="center"><b><a href="01_Seguidor_de_linea/">01 · Seguidor de línea</a></b></td>
+<td align="center"><b><a href="02_Carro_B/">02 · Carro B</a></b></td>
 <td align="center"><b><a href="03_Carro_ESP32/">03 · Explorador</a></b></td>
+</tr>
+<tr>
+<td align="center"><sub><i>Tú trazas el camino.<br>Él lo recorre solo.</i></sub></td>
+<td align="center"><sub><i>Sin camino trazado.<br>Solo tus manos.</i></sub></td>
+<td align="center"><sub><i>No sigue caminos.<br>Los descubre.</i></sub></td>
 </tr>
 </table>
 

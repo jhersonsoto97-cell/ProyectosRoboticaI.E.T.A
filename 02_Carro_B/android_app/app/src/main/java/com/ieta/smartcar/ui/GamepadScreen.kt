@@ -214,6 +214,29 @@ fun GamepadScreen(
                     .clickable { showSocial = true }
             )
 
+            // Cartel de espectador. Va sobre los sticks y no arriba con el resto de la
+            // telemetria: quien esta moviendo el dedo sin que el carro responda tiene la
+            // mirada en los sticks, y un aviso en la barra de arriba no lo va a leer.
+            if (viewModel.mandoOcupado) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = ALTO_BOTONERA + 18.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Neon.Warning.copy(alpha = 0.18f))
+                        .border(1.dp, Neon.Warning.copy(alpha = 0.7f), RoundedCornerShape(50))
+                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "OTRO MANDO TIENE EL CONTROL",
+                        color = Neon.Warning,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             // Los sticks van anclados a las esquinas de abajo y no centrados a media
             // altura: sosteniendo el telefono con las dos manos, los pulgares descansan
             // ahi. Centrarlos obliga a estirar el pulgar en cada maniobra.
