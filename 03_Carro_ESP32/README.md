@@ -1,5 +1,9 @@
 # 📡 Carro Explorador · Sonar y WiFi propio
 
+<p align="center">
+  <img src="docs/carro_explorador.jpg" alt="Carro explorador con ESP32, servo y sensor ultrasónico HC-SR04" width="560">
+</p>
+
 El más completo de los tres. Este carro:
 
 - Crea **su propia red WiFi**, no necesita ninguna red del colegio.
