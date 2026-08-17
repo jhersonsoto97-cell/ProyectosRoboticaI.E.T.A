@@ -598,3 +598,19 @@ no poder dejar el dedo, hay que bajarle el voltaje de entrada con un módulo red
 | **Brownout** | Un reinicio por falta de voltaje |
 | **NVS** | La memoria del ESP32 donde se guarda la calibración aunque se apague |
 | **Encoder** | Sensor que cuenta cuánto giró una rueda. Este carro no lleva |
+
+---
+
+<p align="center">
+  <img src="../docs/logo_colegio.png" alt="I.E.T.A San Diego" height="120">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../docs/logo_dennir.png">
+    <img src="../docs/logo_dennir_claro.png" alt="DENNIR" height="72">
+  </picture>
+</p>
+
+<p align="center">
+  Proyecto de robótica con fines educativos 🤖<br>
+  <sub><b>Docente:</b> Yerson Soto</sub>
+</p>

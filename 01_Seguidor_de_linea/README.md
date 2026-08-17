@@ -350,6 +350,16 @@ más rápido es intercambiar sus dos cables en la bornera del L298N.
 
 ---
 
-Proyecto para fines educativos de robótica. 🤖
+<p align="center">
+  <img src="../docs/logo_colegio.png" alt="I.E.T.A San Diego" height="120">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../docs/logo_dennir.png">
+    <img src="../docs/logo_dennir_claro.png" alt="DENNIR" height="72">
+  </picture>
+</p>
 
-**Docente:** Yerson Soto
+<p align="center">
+  Proyecto de robótica con fines educativos 🤖<br>
+  <sub><b>Docente:</b> Yerson Soto</sub>
+</p>

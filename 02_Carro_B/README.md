@@ -459,3 +459,19 @@ misma batería.
 | **Failsafe** | La protección que frena el carro si se pierde la conexión |
 | **Emparejar** | Presentar dos aparatos Bluetooth para que se reconozcan. Se hace una sola vez |
 | **Monitor Serie** | La ventana del computador donde el Arduino escribe mensajes |
+
+---
+
+<p align="center">
+  <img src="../docs/logo_colegio.png" alt="I.E.T.A San Diego" height="120">
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../docs/logo_dennir.png">
+    <img src="../docs/logo_dennir_claro.png" alt="DENNIR" height="72">
+  </picture>
+</p>
+
+<p align="center">
+  Proyecto de robótica con fines educativos 🤖<br>
+  <sub><b>Docente:</b> Yerson Soto</sub>
+</p>
