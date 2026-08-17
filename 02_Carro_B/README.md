@@ -218,12 +218,18 @@ avanzando: acuérdate de mandar `S` para detenerlo.
 
 ## Paso 5 — Instala la app en el celular
 
-Descarga el APK desde aquí:
+Apunta la cámara del celular a este código:
+
+<p align="center">
+  <img src="../docs/qr_smartcar.png" alt="Código QR para descargar la app IETA Smart Car" width="240">
+</p>
+
+O escribe la dirección a mano:
 
 **https://github.com/jhersonsoto97-cell/ProyectosRoboticaI.E.T.A/releases/latest/download/SmartCar.apk**
 
-O escanea el código QR que te dieron: apunta al mismo archivo y siempre trae la última
-versión.
+El código siempre te trae la **última versión**, así que sirve igual dentro de un año. No
+hace falta cambiarlo cuando salga una actualización.
 
 Tres cosas que se atraviesan la primera vez:
 

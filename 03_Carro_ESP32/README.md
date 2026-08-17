@@ -343,10 +343,22 @@ Se pueden conectar hasta **4 dispositivos a la vez**.
 **Primero instala la app, con internet, ANTES de conectarte al carro.** La red del carro
 no tiene internet: si intentas descargar el APK estando conectado a `SmartCar-03`, falla.
 
-1. Descarga el APK:
-   **https://github.com/jhersonsoto97-cell/ProyectosRoboticaI.E.T.A/releases/latest/download/SmartCar.apk**
-   (o escanea el QR que te dieron). Descárgalo con **Chrome**, no desde el explorador de
-   archivos.
+Apunta la cámara del celular a este código:
+
+<p align="center">
+  <img src="../docs/qr_smartcar.png" alt="Código QR para descargar la app IETA Smart Car" width="240">
+</p>
+
+O escribe la dirección a mano:
+
+**https://github.com/jhersonsoto97-cell/ProyectosRoboticaI.E.T.A/releases/latest/download/SmartCar.apk**
+
+El código siempre trae la **última versión**, así que sirve igual dentro de un año.
+
+Después:
+
+1. Descárgalo con **Chrome**, no desde el explorador de archivos. Desde el explorador,
+   algunos celulares dicen "no se admite el formato" y no pasa nada.
 2. Instálalo. Android te va a pedir permiso para instalar apps de origen desconocido: se
    lo das a Chrome, una sola vez.
 3. Enciende el carro y espera unos segundos.
