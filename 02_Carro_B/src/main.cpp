@@ -22,7 +22,7 @@
     PWM_MIN      -> piso de torque: por debajo de este PWM el motor solo zumba.
 
   Conexion L298N:
-    D10 -> ENA (PWM; retire su jumper), D9 -> IN1, D8 -> IN2
+    D11 -> ENA (PWM; retire su jumper), D9 -> IN1, D8 -> IN2
     D5  -> ENB (PWM; retire su jumper), D7 -> IN3, D6 -> IN4
     OUT1/OUT2 -> motor izquierdo, OUT3/OUT4 -> motor derecho.
 
@@ -37,7 +37,7 @@
 #include <string.h>   // Funcion strchr() para localizar el separador del paquete.
 
 // ---------- Pines configurables del L298N ----------
-const uint8_t PIN_ENA = 10;  // PWM del motor izquierdo; D10 admite PWM en Mega.
+const uint8_t PIN_ENA = 11;  // PWM del motor izquierdo; D11 admite PWM en Mega.
 const uint8_t PIN_IN1 = 9;   // Primera entrada de direccion del motor izquierdo.
 const uint8_t PIN_IN2 = 8;   // Segunda entrada de direccion del motor izquierdo.
 const uint8_t PIN_ENB = 5;   // PWM del motor derecho; D5 admite PWM en Mega.

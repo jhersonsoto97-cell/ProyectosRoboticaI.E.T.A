@@ -1,393 +1,588 @@
-# 03 — Carro explorador con sonar orientable
+# 📡 Carro Explorador · Sonar y WiFi propio
 
-Carro con ESP32 que levanta su propia red WiFi y sirve el mando desde el navegador. El
-servo barre con el ultrasonico y el entorno se dibuja en tiempo real; parando el carro
-se puede levantar el plano del lugar.
+El más completo de los tres. Este carro:
 
-**Sin instalar nada**: cualquiera se conecta al WiFi del carro y abre el navegador.
+- Crea **su propia red WiFi**, no necesita ninguna red del colegio.
+- Lleva un **sonar** que barre de lado a lado y dibuja lo que hay alrededor.
+- Se frena solo si tiene un obstáculo pegado al frente (el **escudo**).
+- Se maneja desde la app, **o desde el navegador sin instalar nada**.
 
-## Como se compila
+Esta guía te lleva desde la caja de materiales hasta el carro andando y dibujando su
+entorno. Sigue los pasos en orden.
 
-Proyecto **ESP-IDF v5.3.2**, sin PlatformIO. Desde la extension de Espressif en VS Code,
-o por linea de comandos:
+¿Palabras raras? Al final hay un [glosario](#glosario).
 
-```powershell
-C:\Espressif\frameworks\esp-idf-v5.3.2\export.ps1
-cd 03_Carro_ESP32
-idf.py set-target esp32
-idf.py build
-idf.py -p COMx flash monitor
+---
+
+## Paso 0 — Reúne los materiales
+
+### Electrónica
+
+- [ ] 1 × **ESP32 DevKit v1** de 30 pines, con su cable USB
+- [ ] 1 × Driver L298N
+- [ ] 1 × Sensor ultrasónico **HC-SR04**
+- [ ] 1 × Servomotor **SG90** (el pequeño azul)
+- [ ] 2 × Resistencias: una de **1 kΩ** y una de **2 kΩ**
+- [ ] 2 × Condensadores electrolíticos de **470 µF**
+- [ ] Cables Dupont
+
+### Chasis
+
+- [ ] 1 × Chasis de robot de dos ruedas
+- [ ] 2 × Motores amarillos (TT) con sus soportes
+- [ ] 2 × Ruedas + 1 × rueda loca
+- [ ] 1 × Soporte para el servo con el HC-SR04 (el "brazo" del sonar)
+- [ ] Tornillos M3 y separadores
+
+### Batería
+
+- [ ] 4 × Celdas **18650**
+- [ ] 2 × Portapilas de 2 celdas cada uno
+- [ ] 1 × Interruptor
+
+### Y además
+
+- [ ] Un celular o tablet Android
+- [ ] Un computador con VS Code
+- [ ] Destornillador, alicate, y multímetro si hay
+
+---
+
+## Paso 1 — Arma el chasis
+
+1. **Pon los motores** con sus soportes en U, uno a cada lado, ejes hacia afuera.
+2. **Mete las ruedas** a presión, hasta el fondo.
+3. **Instala la rueda loca** con sus separadores. El chasis debe quedar paralelo al piso.
+4. **Los portapilas abajo.** Pesan, y abajo bajan el centro de gravedad.
+5. **Las placas arriba**, con separadores o cinta doble faz:
+   - El **ESP32** con su USB accesible desde el borde.
+   - El **L298N** cerca de los motores.
+
+### El brazo del sonar
+
+Es lo que distingue a este carro. El servo va **al frente y bien alto**, con el HC-SR04
+montado encima:
+
+```
+              visto de lado
+
+              [HC-SR04]     <- el sensor, mirando al frente
+                 |
+              [servo]       <- gira el sensor de lado a lado
+                 |
+        =====================
+         (o)            ||
+                      (rueda)
 ```
 
-## Mapa de pines
+Tres cosas:
 
-Placa **DevKit v1 de 30 pines**, modulo WROOM-32.
+- **Al frente y despejado.** Si una placa o un cable le queda por delante, el sonar la
+  detecta como si fuera una pared y el radar muestra un obstáculo que no existe.
+- **Bien firme.** Si el soporte se mueve, cada medición apunta a un lugar distinto y el
+  dibujo sale desordenado.
+- **No atornilles el brazo todavía.** Primero hay que centrar el servo, y eso se hace con
+  el carro encendido. Es el [Paso 7](#paso-7--centra-el-brazo-del-sonar).
 
-| Funcion | GPIO |
-|---|---|
-| Motor izquierdo — ENA (PWM) | 14 |
-| Motor izquierdo — IN1 | 27 |
-| Motor izquierdo — IN2 | 26 |
-| Motor derecho — IN3 | 25 |
-| Motor derecho — IN4 | 33 |
-| Motor derecho — ENB (PWM) | 32 |
+> **Los cables del TRIG y del ECHO, separados el uno del otro.** Si van pegados o
+> trenzados, el pulso del TRIG se "cuela" al cable del ECHO y el carro cree que hay algo a
+> un centímetro. La autoprueba lo detecta y te avisa.
 
-Los seis del driver caen en pines fisicamente consecutivos de la placa y en el mismo orden
-que su header, asi que el mazo va derecho y sin cruces:
+---
+
+## Paso 2 — Conecta los cables
+
+### El driver L298N
+
+| ESP32 | L298N | Mueve |
+|---|---|---|
+| `GPIO 14` | `ENA` | rueda izquierda |
+| `GPIO 27` | `IN1` | rueda izquierda |
+| `GPIO 26` | `IN2` | rueda izquierda |
+| `GPIO 25` | `IN3` | rueda derecha |
+| `GPIO 33` | `IN4` | rueda derecha |
+| `GPIO 32` | `ENB` | rueda derecha |
+
+Estos seis pines quedan **seguidos y en el mismo orden** que el conector del L298N, así
+que el manojo de cables va derecho, sin cruces:
 
 ```
   ESP32   14    27    26    25    33    32
           |     |     |     |     |     |
   L298N  ENA   IN1   IN2   IN3   IN4   ENB
 ```
-| Servo — senal | 18 |
-| HC-SR04 — TRIG | 19 |
-| HC-SR04 — ECHO | 21 (**con divisor**) |
 
-### Pines descartados y por que
+**Quita los jumpers de `ENA` y `ENB`.** Igual que en los otros carros: mientras estén
+puestos, los motores van siempre a fondo.
 
-| GPIO | Motivo |
+### El servo y el sonar
+
+| ESP32 | Va a |
 |---|---|
-| 34, 35, 36, 39 | Solo entrada, no pueden sacar PWM |
-| 12 | Si esta alto al arrancar, el chip configura la flash a 1.8 V y deja de bootear |
-| 0, 5 | Pines de arranque: deciden el modo de boot |
-| 1, 3 | Los usa el USB para programar y ver el monitor |
+| `GPIO 18` | Cable de **señal** del servo (el naranja o amarillo) |
+| `GPIO 19` | `TRIG` del HC-SR04 |
+| `GPIO 21` | `ECHO` del HC-SR04, **con divisor** |
 
-### El ECHO necesita divisor
+### ⚠️ El ECHO necesita divisor, sin excepción
 
-El HC-SR04 saca **5 V** por ECHO y el ESP32 **no tolera** esa tension en sus entradas.
-Conectarlo directo degrada el pin y con el tiempo lo mata.
+El HC-SR04 saca **5 voltios** por el pin `ECHO`. El ESP32 **no aguanta** 5 V en sus
+entradas: se conecta directo y el pin se va dañando hasta que deja de funcionar.
 
-```
-ECHO ---[ 1k ]---+--- GPIO 21
-                 |
-               [ 2k ]
-                 |
-                GND
-```
-
-El TRIG si va directo: es entrada del sensor y reconoce 3.3 V como nivel alto.
-
-## Alimentacion
-
-### La bateria: cuatro celdas en 2S2P
-
-Dos portapilas iguales de dos celdas cada uno, **unidos en paralelo**.
+Dos resistencias lo arreglan:
 
 ```
-  Portapilas A:  [18650]-[18650] --+-- + --> L298N Vin
+   ECHO ---[ 1 kΩ ]---+--- GPIO 21
+                      |
+                   [ 2 kΩ ]
+                      |
+                     GND
+```
+
+El `TRIG` sí va directo: ahí el ESP32 es el que habla, y el sensor entiende sus 3.3 V como
+señal válida.
+
+### Por qué esos pines y no otros
+
+El ESP32 tiene muchos pines, pero no todos sirven:
+
+| Pines | Por qué no se usan |
+|---|---|
+| 34, 35, 36, 39 | Solo sirven para leer, no para sacar señal |
+| 12 | Si está en alto al encender, el chip no arranca |
+| 0, 5 | Deciden cómo arranca el chip |
+| 1, 3 | Los usa el USB para programar |
+
+---
+
+## Paso 3 — Conecta la alimentación
+
+Esta parte tiene más cuidado que en los otros carros, porque hay tres cosas con hambres
+muy distintas: los motores tiran mucha corriente, el servo da picos cortos y fuertes, y el
+ESP32 necesita una alimentación estable o se reinicia.
+
+### La batería: cuatro celdas, pero en paralelo
+
+Los dos portapilas de 2 celdas se unen **en paralelo**: positivo con positivo, negativo
+con negativo.
+
+```
+  Portapilas A:  [18650]-[18650] --+-- + --> interruptor --> L298N
                                     |
   Portapilas B:  [18650]-[18650] --+
 
-                 ambos negativos ------ GND
+                 los dos negativos ------ GND
 ```
 
 | | Un portapilas | Los dos en paralelo |
 |---|---|---|
-| Tension | 7.4 V | **7.4 V**, no cambia |
-| Capacidad | ~2500 mAh | **~5000 mAh** |
-| Resistencia interna | ~0.1 ohm | **~0.05 ohm** |
+| Voltaje | 7.4 V | **7.4 V**, igual |
+| Duración | ~2500 mAh | **~5000 mAh**, el doble |
+| Resistencia interna | ~0.1 Ω | **~0.05 Ω**, la mitad |
 
-Lo que importa no es solo la autonomia sino la resistencia interna: a la mitad, la
-tension cae la mitad cuando arrancan los motores, y el regulador de 5 V del driver se
-mantiene por encima de su minimo durante mucho mas tiempo de descarga.
+Lo que más importa es lo último: con la mitad de resistencia interna, el voltaje se cae la
+mitad cuando arrancan los motores. Menos caídas, menos reinicios.
 
-**Nunca en serie.** Cuatro celdas en serie dan 16.8 V cargadas: los motores, que son de
-3 a 6 V, reciben cerca de 13 V tras la caida del driver y se queman. El regulador, por su
-parte, tendria que disipar 1.8 W y entraria en proteccion termica.
+### 🚨 Nunca los conectes en serie
 
-**Antes de unir los portapilas**, medir cada uno por separado: la diferencia entre ambos
-debe ser menor a 0.1 V. Si uno esta cargado y el otro no, al conectarlos el lleno
-descarga sobre el vacio con varios amperios. Y revisar dos veces la polaridad: positivo
-con positivo. Invertir uno crea un cortocircuito entre packs, y un 18650 entrega veinte
-amperios sin esfuerzo.
+Cuatro celdas en serie dan **16.8 V**. A los motores, que son de 3 a 6 V, les llegarían
+casi 13 V y **se queman**.
 
-### El reparto de rieles
+### 🚨 Antes de unir los dos portapilas
+
+1. **Mide cada uno por separado** con el multímetro. La diferencia entre ambos tiene que
+   ser **menor a 0.1 V**. Si uno está cargado y el otro no, al unirlos el lleno se
+   descarga sobre el vacío con varios amperios: se calientan y se dañan.
+2. **Revisa la polaridad dos veces.** Positivo con positivo. Al revés es un cortocircuito
+   directo, y una celda 18650 entrega veinte amperios sin despeinarse.
+
+### Cómo se reparte la corriente
 
 ```
-                        +--> ESP32 VIN                    + 470 uF
+                        +--> ESP32 pin VIN                + 470 µF
   4x 18650 (7.4V) ------+
                         +--> L298N Vin --+--> motores
                                          |
-                                         +--> 5V out --+--> HC-SR04
-                                                       |
-                                                       +--> SERVO  + 470 uF
+                                         +--> salida 5V --+--> HC-SR04
+                                                          |
+                                                          +--> SERVO  + 470 µF
 
-  todos los negativos ------------------------------------- GND comun
+  todos los negativos -------------------------------------- GND común
 ```
 
-### Por que el ESP32 cuelga de la bateria y no del riel de 5 V
+El **ESP32 cuelga directamente de la batería**, no del riel de 5 V del driver. Es a
+propósito: si colgara del mismo riel que el servo, cada tirón del servo le movería la
+alimentación y lo reiniciaría en plena maniobra.
 
-Este reparto no fue la primera idea. El plan original colgaba el ESP32 del riel de 5 V del
-driver, y **la medicion lo descarto**: ese pin da 4.74 V sin carga y **cae a 2.31 V** al
-conectar el ESP32, que ni siquiera llega a arrancar.
-
-Un 78M05 sano con 8.1 V a la entrada da 5.00 V clavados. Que ya salga bajo *sin carga*
-dice que el problema no es la corriente sino el pin. La causa mas comun es el **jumper de
-5V-EN** del L298N, que decide si ese terminal es salida del regulador o entrada de 5 V
-externos: quitado, el terminal queda flotando, mide algo por fugas y se hunde con
-cualquier carga.
-
-**Antes de dar por muerto el riel, revisar ese jumper y volver a medir.** Si con el jumper
-puesto aparecen 5.0 V, el riel sirve para el servo y el sensor. Si sigue en 4.74 V, el
-regulador esta danado y hace falta un modulo buck (LM2596) para alimentarlos.
-
-El ESP32 va a la bateria en cualquiera de los dos casos: alimentarlo desde el mismo riel
-del que cuelga el servo significa que cada pico del servo puede reiniciar el micro.
-
-| Carga | Consumo | De donde cuelga |
-|---|---|---|
-| ESP32 | 150 mA medios, picos de 250 | Bateria, por el pin VIN |
-| HC-SR04 | 15 mA | Riel de 5 V |
-| Servo | 150 mA, picos de 700 | Riel de 5 V, con capacitor propio |
-| Motores | 400 a 800 mA, picos de 2 A | Etapa de potencia del driver |
-
-**Lo que disipa el regulador del DevKit.** El AMS1117 de la placa baja de 8.1 V a 3.3 V
-con 150 mA medios, o sea `(8.1 - 3.3) x 0.15 = 0.72 W`. Queda caliente al tacto pero
-dentro de especificacion, y el integrado trae proteccion termica: si se pasa, se apaga
-solo antes de romperse.
-
-Con el pico de 250 mA la cuenta da 1.2 W, pero **ese numero no sirve para dimensionar**:
-son milisegundos de transmision de radio, no regimen permanente. Lo que calienta el
-encapsulado es la media.
-
-**Verificar en el primer arranque**: tocar el regulador a los diez minutos. Tibio esta
-bien; si quema al punto de no poder dejar el dedo, hay que bajar la tension de entrada con
-un buck antes del pin VIN.
-
-### Por que cada capacitor
-
-Un SG90 consume 100 a 250 mA moviendose y hasta 700 mA al arrancar. Ese pico dura
-milisegundos pero hunde el riel, y el sonar mueve el servo cincuenta veces por segundo.
-El capacitor entrega ese pico localmente para que la caida no llegue al resto.
-
-El del ESP32 cumple la misma funcion con los picos de transmision de la radio, que se
-reducen ademas bajando la potencia de TX (ver `WIFI_POTENCIA_TX` en `config.h`).
-
-### El capacitor va pegado al servo
-
-470 uF entre alimentacion y GND, **lo mas cerca posible del conector del servo**. Lo que
-causa la caida es la inductancia del cable, asi que el capacitor tiene que estar del lado
-del servo para poder entregar el pico localmente; puesto en la placa no sirve de nada.
-
-### Tierras
-
-Todas unidas en un punto: ESP32, L298N, servo, sensor y bateria. El negativo del servo va
-directo al GND del L298N y **no** al pin GND del ESP32: si su corriente de pico vuelve por
-la tierra del micro, la caida en ese cable corre la referencia del ESP32 y produce
-lecturas erraticas y reinicios.
-
-### Lo que no se debe hacer
-
-| Nunca | Que pasa |
+| Qué | Cuánto consume |
 |---|---|
-| Bateria de 9V para los motores | No entrega la corriente; la tension se desploma al arrancar |
-| Mas de 12 V al pin VIN | El regulador del DevKit no lo tolera. Hasta 12 V esta en hoja de datos, y 8.1 V sobra |
-| 5 V al pin 3V3 | Va directo al chip, sin regulador. Lo quema |
-| Servo al pin 3V3 | No entrega esa corriente y el servo queda sin fuerza |
-| Servo al pin 5V del DevKit | Ese pin no esta regulado: es el VIN pasado de largo, o sea los 8.1 V de la bateria |
-| Servo a los 7.4 V de la bateria | Un SG90 se quema por encima de unos 6 V |
-| Cuatro celdas en serie | 16.8 V cargadas. Quema los motores y el regulador entra en proteccion |
+| ESP32 | 150 mA normales, picos de 250 |
+| HC-SR04 | 15 mA |
+| Servo | 150 mA, **picos de 700** |
+| Motores | 400 a 800 mA, picos de 2 A |
 
-## Diagnostico sin cable
+### Los condensadores
+
+Uno **pegado al servo** y otro cerca del ESP32, cada uno entre alimentación y GND.
+
+Un servo pide hasta 700 mA de golpe, en milisegundos. El condensador guarda un poquito de
+energía justo al lado y entrega ese pico localmente, para que la caída no llegue al resto
+del carro.
+
+**El del servo va lo más cerca posible del servo.** Lo que causa la caída es el propio
+cable; puesto lejos, en la placa, no sirve de nada.
+
+> Los condensadores electrolíticos **tienen polaridad**. La pata larga es el positivo, y
+> el lado con la franja clara es el negativo. Al revés se hinchan y revientan.
+
+### Las tierras
+
+Todos los negativos unidos en un punto: ESP32, L298N, servo, sensor y batería.
+
+Con una excepción importante: **el negativo del servo va al `GND` del L298N, no al del
+ESP32**. Si la corriente de pico del servo vuelve por la tierra del ESP32, le corre la
+referencia y produce lecturas raras y reinicios.
+
+### 🚨 Lo que nunca hay que hacer
+
+| Nunca | Qué pasa |
+|---|---|
+| Batería de 9 V para los motores | No entrega la corriente; el voltaje se desploma |
+| Más de 12 V al pin `VIN` | El regulador del ESP32 no lo aguanta |
+| 5 V al pin `3V3` | Ese pin va directo al chip. Lo quema |
+| El servo al pin `3V3` | No entrega esa corriente y el servo queda sin fuerza |
+| El servo al pin `5V` del ESP32 | Ese pin **no está regulado**: es el `VIN` pasado de largo, o sea los 7.4 V de la batería |
+| El servo a los 7.4 V de la batería | Un SG90 se quema arriba de 6 V |
+| Las cuatro celdas en serie | 16.8 V. Quema los motores |
+
+---
+
+## Paso 4 — Carga el firmware
+
+Este carro **no usa PlatformIO** sino **ESP-IDF**, que es la herramienta oficial de
+Espressif. Es más pesada de instalar, pero es la que da acceso a todo lo que hace el chip.
+
+Desde la extensión de Espressif en VS Code, o por línea de comandos:
+
+```powershell
+C:\Espressif\frameworks\esp-idf-v5.3.2\export.ps1
+cd 03_Carro_ESP32
+idf.py set-target esp32
+idf.py build
+idf.py -p COM7 flash monitor
+```
+
+Cambia `COM7` por el puerto de tu placa. Lo ves en el Administrador de dispositivos de
+Windows, como "Silicon Labs CP210x".
+
+### Si la carga falla
+
+| Error | Qué hacer |
+|---|---|
+| `Cannot configure port` o `Write timeout` | Carga más despacio: `idf.py -p COM7 -b 115200 flash`. Algunos cables y adaptadores no aguantan la velocidad por defecto |
+| `Failed to connect` | Mantén oprimido el botón **BOOT** de la placa mientras empieza la carga |
+| No aparece ningún puerto COM | Falta el driver del CP210x, o el cable es solo de carga y no lleva datos |
+| El puerto aparece pero nada funciona | Desconecta y vuelve a conectar el USB; prueba otro puerto, directo al computador |
+
+---
+
+## Paso 5 — Primer encendido y autoprueba
+
+Al arrancar, el carro **se prueba solo** y cuenta lo que encuentra. Es la mejor
+herramienta que tienes para saber si el cableado quedó bien.
+
+1. **Levanta el carro**: la autoprueba mueve las ruedas.
+2. Conecta la batería.
+3. Mira los mensajes con `idf.py -p COM7 monitor`, o después desde el
+   [panel de diagnóstico](#el-panel-de-diagnóstico) sin cables.
+
+### Qué te va a decir
+
+**Del sonar:**
+
+| Mensaje | Qué significa |
+|---|---|
+| `9 de 9 con eco valido` | Perfecto |
+| `sin flanco: el ECHO nunca subio` | El sensor no responde. Revisa sus 5 V, su GND, y el `TRIG` en GPIO 19 |
+| `pulso 55 us = 0.9 cm, fuera de rango` | Eso no es un eco: es el disparo del TRIG colándose al cable del ECHO. **Separa los dos cables** |
+
+**De los motores:** mueve una rueda a la vez, en los dos sentidos, y te dice qué pines
+puso en alto.
+
+| Lo que ves | Qué revisar |
+|---|---|
+| No gira ninguna | Falta batería en el driver, o quedaron los jumpers `ENA`/`ENB` |
+| Gira una sola | Revisa los tres cables de esa rueda |
+| Gira al revés | Cambia su `INVERTIR_*` en `config.h` |
+| Gira en un solo sentido | El pin que quedó en alto no está llegando al driver |
+
+### ⚠️ Con el USB solo, el carro se reinicia
+
+Cuando enciende el WiFi, el ESP32 pega un tirón de corriente que **el puerto USB no
+alcanza a dar**. El carro se reinicia justo ahí, una y otra vez, sin llegar a levantar la
+red.
+
+No está dañado. **Conecta la batería** y deja de pasar. El USB alcanza para programar,
+pero no para funcionar.
+
+---
+
+## Paso 6 — Conéctate con el celular
+
+Este carro **crea su propia red WiFi**. No usa la red del colegio ni necesita internet.
+
+| Dato | Valor |
+|---|---|
+| Nombre de la red | `SmartCar-03` |
+| Contraseña | `explorador` |
+| Dirección del carro | `192.168.4.1` |
+
+Se pueden conectar hasta **4 dispositivos a la vez**.
+
+### Con la app (recomendado)
+
+**Primero instala la app, con internet, ANTES de conectarte al carro.** La red del carro
+no tiene internet: si intentas descargar el APK estando conectado a `SmartCar-03`, falla.
+
+1. Descarga el APK:
+   **https://github.com/jhersonsoto97-cell/ProyectosRoboticaI.E.T.A/releases/latest/download/SmartCar.apk**
+   (o escanea el QR que te dieron). Descárgalo con **Chrome**, no desde el explorador de
+   archivos.
+2. Instálalo. Android te va a pedir permiso para instalar apps de origen desconocido: se
+   lo das a Chrome, una sola vez.
+3. Enciende el carro y espera unos segundos.
+4. Abre la app y elige la tarjeta **Explorador**.
+5. Toca **VINCULAR**. En Android 10 o más nuevo, la app se une sola a la red del carro. En
+   versiones anteriores te manda a los ajustes de WiFi para que la elijas a mano.
+6. Listo: el indicador de arriba se pone verde y el radar empieza a dibujar.
+
+### Sin instalar nada, desde el navegador
+
+1. Conéctate al WiFi `SmartCar-03` desde los ajustes del celular.
+2. Abre el navegador y entra a **`http://192.168.4.1`**.
+
+La página viene guardada adentro del carro. Es más básica que la app (no tiene escudo, ni
+alerta de proximidad, ni ajustes guardados), pero sirve para cualquier celular y no
+requiere instalar nada.
+
+> Android puede avisarte que "esta red no tiene internet" y preguntarte si quieres seguir
+> conectado. Dile que **sí**. Si le dices que no, se va por datos móviles y el carro deja
+> de responder.
+
+### Los controles de la app
+
+| Control | Qué hace |
+|---|---|
+| Stick izquierdo | Acelerador |
+| Stick derecho | Dirección |
+| **CENTRO** | Mantiene el sonar apuntando al frente, para poder atornillar el brazo |
+| **ESCUDO** | Cuando está activo, no deja acelerar si hay algo a menos de 10 cm |
+| **MAPA** | Detiene el carro y levanta el plano del lugar girando sobre su eje |
+| **MODO** | Cambia entre ARCADE y TANK |
+| **LIMITE** | Tope de potencia: 40 %, 70 % o 100 % |
+| Ventana del radar | Lo que el sonar va encontrando. El slider de al lado es el zoom |
+
+> **Empieza en LIMITE 40 %** hasta que le tomes el pulso.
+
+---
+
+## Paso 7 — Centra el brazo del sonar
+
+El servo no queda derecho por casualidad: hay que ponerlo en su centro **antes** de
+apretar el tornillo del brazo. Si no, el carro va a creer que mira al frente cuando en
+realidad apunta de medio lado, y todo el dibujo del radar sale corrido.
+
+1. Con el carro encendido y la app conectada, toca **CENTRO**. El servo se planta en su
+   punto medio y se queda ahí.
+2. Con el servo quieto, acomoda el brazo con el HC-SR04 **apuntando exactamente al
+   frente**.
+3. Aprieta el tornillo.
+4. Vuelve a tocar **CENTRO** para soltarlo. El sonar arranca a barrer.
+
+Comprueba que quedó bien: pon un obstáculo justo al frente del carro y mira el radar. El
+eco tiene que aparecer **arriba, en el centro** de la pantalla.
+
+---
+
+## Paso 8 — Que ande derecho
+
+Acelerando a fondo vas a notar que el carro **se abre hacia un lado**. Es normal: dos
+motores nunca son idénticos, y los dos canales del L298N tampoco entregan exactamente el
+mismo voltaje.
+
+En este carro se corrige **desde la app, sin recompilar nada**, y el ajuste queda guardado
+en la memoria del carro.
+
+1. **Primero descarta lo mecánico.** Levanta el carro y corre la prueba de motores del
+   panel. Si una rueda va visiblemente más lenta, si algo roza, o si la batería está baja,
+   arregla eso primero: compensar por software solo tapa el problema.
+2. Marca una recta de unos **4 metros**.
+3. En la app, engranaje → **DESVIO AL ACELERAR**.
+4. Acelera **a fondo**, sin tocar la dirección, y mira para dónde se abre.
+
+| Se va hacia... | Qué haces |
+|---|---|
+| la **izquierda** | **Sube** el número (`+1` / `+5`) |
+| la **derecha** | **Baja** el número (`-1` / `-5`) |
+
+Regla única: **el carro se va para un lado, mueves el número hacia el lado contrario.**
+
+Debajo del número la app te dice qué está haciendo, por ejemplo `frena DER a 91%`. Ajusta
+de a 5 primero y de a 1 al final. Suele quedar cerca de 90.
+
+> Prueba siempre **a fondo**. Despacio la corrección casi no se nota, así que un carro que
+> a media velocidad parece derecho igual se abre acelerando.
+
+**Si necesitas bajar de 70, no sigas:** eso ya no es diferencia entre motores, es una
+falla mecánica.
+
+Este ajuste **vive en el carro, no en tu celular**. Si otra tablet se conecta, ve el mismo
+valor. Está hecho así a propósito: la calibración depende de los motores de ese carro, no
+de quién lo maneje.
+
+---
+
+## El panel de diagnóstico
 
 `http://192.168.4.1/diag`, desde el mismo celular y sin instalar nada.
 
-Es el monitor serie, servido por WiFi. El firmware engancha el log del sistema y copia
-cada linea a un buffer de 8 KB **ademas** de sacarla por el UART, asi que el cable sigue
-funcionando igual cuando lo hay. El enganche se instala antes que ninguna otra cosa, de
-modo que la autoprueba de arranque queda guardada y se puede leer despues, aunque haya
-corrido varios segundos antes de que el WiFi existiera.
+Es el Monitor Serie, pero servido por WiFi. Sin esto tendrías que tener el carro sobre la
+mesa y amarrado al computador, que es justo la posición en la que no puedes probar nada:
+las ruedas no tocan el piso y la batería no está alimentando.
 
-Sin esto, el bring-up obliga a tener el carro sobre la mesa y atado al PC, que es justo la
-postura en la que no se puede probar nada: las ruedas no tocan el piso y la bateria no
-esta alimentando.
-
-### Que muestra
-
-| Dato | Para que sirve |
+| Qué muestra | Para qué sirve |
 |---|---|
-| **Razon del ultimo reinicio** | `BROWNOUT` es fuente, `PANIC` es codigo. Sin este dato los dos se ven igual desde afuera: un carro que se reinicia solo |
-| Memoria libre y minimo historico | Delata una fuga en una demostracion larga |
-| Encendido hace | Si vuelve a cero, hubo un reinicio que quiza no se noto |
-| Potencia por rueda y failsafe | Lo que el firmware esta mandando de verdad al driver |
-| Ultima lectura del sonar | Angulo y distancia, sin tocar el carro |
-| Consola | Todo el log, con scroll y con seguimiento automatico |
+| Razón del último reinicio | `BROWNOUT` es problema de alimentación, `PANIC` es del programa. Desde afuera los dos se ven igual |
+| Memoria libre | Delata una fuga en una demostración larga |
+| Encendido hace | Si vuelve a cero, hubo un reinicio que quizá no notaste |
+| Potencia por rueda | Lo que el carro le está mandando de verdad al driver |
+| Última lectura del sonar | Ángulo y distancia, sin tocar nada |
+| Consola | Todo el registro de mensajes, incluida la autoprueba de arranque |
+| Ajustes | Los valores de calibración, editables ahí mismo |
 
-### Repetir una prueba
+Tiene además cinco botones para repetir pruebas: servo, sonar, motor izquierdo, motor
+derecho y todo junto. Mueves un cable, tocas el botón y ves el resultado en segundos.
 
-Cinco botones: servo, sonar, motor izquierdo, motor derecho, y todo junto. Se mueve un
-cable, se toca el boton y el resultado aparece en la consola en unos segundos.
+**Las pruebas de motor mueven las ruedas. Levanta el carro antes de tocarlas.**
 
-Las pruebas no corren dentro del manejador HTTP sino en el lazo principal. Una prueba de
-motor bloquea mas de un segundo y una de sonar varios; ejecutarlas en la tarea del
-servidor dejaria la pantalla congelada durante justo lo que se quiere mirar.
+---
 
-**Las pruebas de motor mueven las ruedas.** Levantar el carro antes de tocarlas.
+## Si algo no funciona
 
-### Por que sondeo y no WebSocket
-
-La pantalla pregunta cada segundo en vez de mantener un socket abierto. Un socket se cae
-cuando el carro se reinicia, que es precisamente el momento que interesa observar; el
-sondeo se recupera solo en el siguiente intento y muestra el reinicio, en lugar de
-quedarse mudo esperando una reconexion.
-
-## Como se usa
-
-1. Encender el carro
-2. Conectarse al WiFi `SmartCar-03`, clave `explorador`
-3. Abrir `http://192.168.4.1`
-
-| Control | Que hace |
+| Lo que ves | Qué revisar |
 |---|---|
-| Stick izquierdo | Acelerador |
-| Stick derecho | Direccion |
-| ESCANEAR | Detiene el carro y levanta el plano girando sobre su eje |
-| LIMPIAR | Borra los ecos y el plano de la pantalla |
-| PARO | Detiene de inmediato |
+| Se reinicia sin parar al encender | Estás con USB solo. Conecta la batería |
+| No aparece la red `SmartCar-03` | El carro no llegó a arrancar; míralo por el Monitor Serie |
+| Conecta pero no responde | Android se fue por datos móviles. Acepta seguir en la red sin internet |
+| El radar no dibuja nada | El sonar no responde: revisa sus 5 V y su GND |
+| El radar dibuja obstáculos que no existen | Los cables de TRIG y ECHO van pegados. Sepáralos |
+| El eco aparece corrido de lado | Falta centrar el brazo (Paso 7) |
+| El servo tiembla o zumba | Le falta el condensador, o está alimentado del pin equivocado |
+| No gira ninguna rueda | Falta batería en el driver, o quedaron los jumpers |
+| Se abre hacia un lado | Normal. Ve al [Paso 8](#paso-8--que-ande-derecho) |
+| Se reinicia al acelerar | Batería descargada, o falta la tierra común |
 
-## Por que el escaneo se hace parado
+---
 
-El error de odometria nace del **desplazamiento**: sin encoders, la unica forma de saber
-cuanto avanzo el carro es contar cuanto PWM se le mando, y eso se degrada tanto que en
-pocos metros el mapa queda torcido.
+## Para saber más
 
-Escaneando **quieto** ese error no existe. El barrido desde un punto fijo es
-geometricamente exacto, y por eso el plano que sale de aqui es confiable aunque el
-chasis no tenga realimentacion.
+### Por qué el mapa se levanta con el carro quieto
 
-## Arquitectura
+Este carro no tiene encoders ni giroscopio, así que la única forma de saber cuánto avanzó
+sería contar cuánta potencia se le mandó a los motores. Ese cálculo se equivoca cada vez
+más, y en pocos metros el mapa queda torcido.
+
+Escaneando **quieto** ese error no existe: un barrido desde un punto fijo es exacto. Por
+eso el botón MAPA primero detiene el carro.
+
+### Cómo está organizado por dentro
 
 ```
-        ESP32 (punto de acceso "SmartCar-03")
+        ESP32 (crea la red "SmartCar-03")
    +-------------------------------------------+
-   |  HTTP  -> pagina embebida en el firmware  |
-   |  WS    -> control 20 Hz + telemetria      |
+   |  HTTP  -> la página web guardada adentro  |
+   |  WS    -> control 20 veces por segundo    |
    |                                           |
-   |  nucleo 0 : barrido del sonar             |
-   |  nucleo 1 : servidor y lazo de control    |
+   |  núcleo 0 : el barrido del sonar          |
+   |  núcleo 1 : el servidor y el control      |
    +-------------------------------------------+
-                    | LEDC
+                    |
               driver -> 2 motores
 ```
 
-Los nucleos se reparten a proposito: una medicion del ultrasonico bloquea hasta 25 ms
-esperando el eco, y ese tiempo no puede robarselo al servidor ni al lazo de control.
+Los dos núcleos se reparten el trabajo a propósito: una medición del ultrasónico se queda
+esperando el eco hasta 25 ms, y ese tiempo no se le puede robar al control del carro.
 
-| Archivo | Responsabilidad |
+| Archivo | De qué se encarga |
 |---|---|
-| `main/config.h` | Todo lo ajustable: pines, limites, calibracion |
-| `main/drive.c` | Traccion, rampa, failsafe, giro sobre el eje |
-| `main/sonar.c` | Servo, medicion y escaneo estacionado |
-| `main/web.c` | Punto de acceso, servidor HTTP y WebSocket |
-| `main/web_page.h` | Interfaz, embebida en el firmware |
+| `main/config.h` | Todo lo ajustable: pines, límites, calibración |
+| `main/drive.c` | Motores, aceleración suave, failsafe, giro sobre el eje |
+| `main/sonar.c` | Servo, medición y escaneo |
+| `main/ajustes.c` | La calibración que se guarda en la memoria del carro |
+| `main/web.c` | La red WiFi, el servidor y el WebSocket |
+| `main/diag.c` | El panel de diagnóstico |
 
-## Protocolo
+### Cómo se hablan la app y el carro
 
 ```
-navegador -> carro   {"t":"c","l":-255..255,"r":-255..255}
-                     {"t":"scan"}
-                     {"t":"stop"}
-                     {"t":"centrar","v":0|1}
-                     {"t":"trim","l":10..100,"r":10..100}
+app -> carro    {"t":"c","l":-255..255,"r":-255..255}    manejar
+                {"t":"scan"}                             levantar el mapa
+                {"t":"stop"}                             detener
+                {"t":"centrar","v":0|1}                  centrar el servo
+                {"t":"trim","l":10..100,"r":10..100}     compensar el desvío
 
-carro -> navegador   {"t":"s","a":grados,"d":cm}
-                     {"t":"p","v":0..100}
-                     {"t":"e","pts":[{"a":..,"d":..}, ...]}
+carro -> app    {"t":"s","a":grados,"d":cm}              un eco del sonar
+                {"t":"p","v":0..100}                     avance del escaneo
+                {"t":"e","pts":[...]}                    el mapa completo
 ```
 
-Los angulos van referidos al **frente del carro**: 0 es hacia adelante y crece hacia la
-derecha. El cero del servo es un tope mecanico que no significa nada para quien mira la
-pantalla, asi que la conversion se hace en el firmware y el resto del sistema trabaja
-siempre en el marco del carro.
+Los ángulos van referidos **al frente del carro**: 0 es adelante y crece hacia la derecha.
 
-El navegador transmite cada 50 ms aunque los sticks no cambien: ese flujo constante es
-lo que alimenta el failsafe, de modo que una caida de WiFi o un navegador que se cierra
-terminan en parada y no en un carro descontrolado.
+La app manda órdenes 20 veces por segundo aunque no muevas los dedos. Si ese goteo se
+corta —se cierra la app, se aleja el celular, se acaba la batería— el carro **frena solo**
+en medio segundo.
 
-`trim` es la unica trama que deja algo escrito en la memoria del carro. Se manda solo
-mientras alguien esta corrigiendo el desvio, no en cada tick: `ajustes_fijar` ignora el
-valor que ya estaba, asi que reenviarlo no gasta ciclos de flash, pero repetirlo sin
-motivo pisaria la calibracion de quien la ajuste desde otro mando.
+### Sobre el riel de 5 V del L298N
 
-## Marcha recta
+En este carro se midió y **no sirve**: da 4.74 V sin carga y **cae a 2.31 V** al conectarle
+el ESP32.
 
-Dos motores de la misma tanda no giran igual. Con los dos al maximo el carro describe
-una curva abierta, mas notoria cuanto mas rapido va, y a fondo se le nota clarito.
+Un regulador sano daría 5.00 V clavados. Que ya salga bajo *sin carga* dice que el
+problema no es el consumo sino ese pin. La causa más común es el **jumper de `5V-EN`** del
+módulo: si está quitado, ese terminal queda flotando y se hunde con cualquier carga.
 
-Se corrige recortando el techo de PWM de la rueda que corre mas, con `trim_izquierda` y
-`trim_derecha` (10..100, de fabrica 100). El recorte va al techo y no a la salida final:
-recortar al final empujaria los valores bajos por debajo del piso de torque y el motor
-compensado se quedaria quieto justo donde mas falta hace la precision.
+Antes de darlo por muerto, revisa ese jumper y vuelve a medir. Si con el jumper puesto
+aparecen 5.0 V, el riel sirve para el servo y el sensor. Si sigue en 4.74 V, el regulador
+está dañado y hace falta un módulo reductor (LM2596).
 
-Por como esta armado, la correccion vale cero en el arranque y crece con el acelerador,
-que es como se comporta el desbalance real entre dos motores.
+El ESP32 va a la batería en cualquiera de los dos casos.
 
-Como encontrar el valor:
+### El calor del regulador del ESP32
 
-1. Antes de compensar, descartar la mecanica. Levantar el carro, correr la prueba de
-   motores del panel, mirar si una rueda va visiblemente mas lenta, que ninguna roce y
-   que la bateria este cargada. Compensar sobre una falla mecanica la tapa.
-2. Marcar unos 4 m de recta y acelerar **a fondo**, sin tocar la direccion.
-3. Si se va a la izquierda, bajar el trim de la rueda **derecha**; si se va a la
-   derecha, el de la izquierda. De a 5 primero, de a 1 al final.
-4. Suele quedar entre 85 y 95. Necesitar menos de 70 es senal de un problema mecanico.
+El regulador de la placa baja de 7.4 V a 3.3 V con 150 mA, o sea unos **0.7 W**. Queda
+caliente al tacto pero está dentro de lo normal, y trae protección: si se pasa, se apaga
+solo antes de romperse.
 
-Se ajusta desde el panel `/diag` o, mas comodo, desde la ventana de ajustes de la app,
-que lo corrige sin soltar el mando. Queda guardado en NVS y sobrevive al corte de
-energia. Vive en el carro y no en el telefono a proposito: es una propiedad de sus
-motores, y con varias tablets sobre un mismo carro, la que lo guardara en su disco se lo
-impondria a las demas.
+**Tócalo a los diez minutos del primer encendido.** Tibio está bien. Si quema al punto de
+no poder dejar el dedo, hay que bajarle el voltaje de entrada con un módulo reductor.
 
-## Hardware
+---
 
-| Elemento | Detalle |
+## Glosario
+
+| Palabra | Qué significa |
 |---|---|
-| Microcontrolador | ESP32 DevKit v1, 30 pines, modulo WROOM-32 |
-| Sensado | Servomotor con HC-SR04 sobre el brazo |
-| Traccion | Dos motores DC |
-| Encoders | **No tiene** |
-| IMU | **No tiene** |
-
-## Por que el radar clasico no alcanza
-
-La combinacion servo + ultrasonico + ESP32 tiene decenas de implementaciones publicas,
-casi todas iguales: el sensor barre 180 grados y dibuja un radar en pantalla. El carro
-no se mueve, y la imagen se borra en cada barrido.
-
-Lo que casi nadie hace con este hardware es **acumular** esos barridos mientras el carro
-se desplaza, para construir un mapa que persiste. Ahi esta el margen para hacer algo que
-no sea una repeticion.
-
-## Investigacion previa
-
-### Lo que ya existe y se puede reutilizar
-
-| Proyecto | Que aporta | Que habria que cambiar |
-|---|---|---|
-| [abedshaaban/arduino-radar](https://github.com/abedshaaban/arduino-radar) | ESP32 + HC-SR04 + servo con interfaz web por WebSocket, control de inicio y parada, modo punto de acceso | El radar es estatico y sin memoria: no acumula ni relaciona barridos |
-| [mhhridoy7907/esp32-radar-system](https://github.com/mhhridoy7907/esp32-radar-system) | SoftAP y render polar en el navegador, sin router de por medio | Mismo limite: sin desplazamiento ni mapa persistente |
-| [ClemensAtElektor/Lidar-controlled-autonomous-vehicle](https://github.com/ClemensAtElektor/Lidar-controlled-autonomous-vehicle) | Vehiculo autonomo con ESP32 que navega una habitacion sin chocar | Usa LIDAR 2D real, no sonar. La logica de navegacion si es transferible |
-| [RawFish69/ESP32-RC-Car](https://github.com/RawFish69/ESP32-RC-Car) | Chasis ESP32 con TB6612FNG y mapeo del entorno | Depende de un LD06, sensor que este proyecto no tiene |
-| [Zbotic — Ultrasonic Grid Mapping](https://zbotic.in/ultrasonic-grid-mapping-2d-arduino-robot/) | Grilla de ocupacion 2D con robot Arduino y ultrasonido | Referencia directa del enfoque, en version simplificada |
-
-### Limites fisicos que conviene tener presentes
-
-| Dato | Valor | Consecuencia |
-|---|---|---|
-| Precision de distancia del HC-SR04 | +/- 3 mm | Suficiente; no es la limitante |
-| Apertura del haz | ~15 grados | Contra los 0.1 grados de un LIDAR. Un obstaculo angosto se dibuja como un arco ancho |
-| Alcance util en interiores | ~4 m | Superficies blandas y angulos agudos devuelven eco debil o nulo |
-| Deriva de odometria sin IMU | mapa confiable hasta ~4x4 m | El error de rumbo se acumula y tuerce el mapa |
-| Deriva agregando IMU | ~8x8 m | Un giroscopio corrige el rumbo, que es donde mas duele el error |
-
-Fuentes: [Zbotic](https://zbotic.in/ultrasonic-grid-mapping-2d-arduino-robot/),
-[Sonar-based SLAM using Occupancy Grid Mapping and Dead Reckoning](https://www.researchgate.net/publication/331856014_Sonar-based_SLAM_Using_Occupancy_Grid_Mapping_and_Dead_Reckoning).
-
-## Decisiones abiertas
-
-1. Si el chasis tiene encoders, y con cuantos pulsos por vuelta
-2. Que driver de motores lleva
-3. Si hay presupuesto para sumar IMU o encoders
-4. Cual de los conceptos candidatos se persigue
-5. Donde se demuestra el proyecto y con cuanto tiempo
+| **Firmware** | El programa que va adentro del ESP32 |
+| **ESP-IDF** | Las herramientas oficiales para programar el ESP32 |
+| **APK** | El archivo de instalación de una app de Android |
+| **Punto de acceso** | Cuando un aparato crea su propia red WiFi en vez de conectarse a una |
+| **Sonar / ultrasónico** | Sensor que manda un chillido que no oímos y mide cuánto tarda el eco en volver |
+| **Servo** | Motor que se puede mandar a un ángulo exacto, en vez de solo girar |
+| **PWM** | Cómo se controla la velocidad: prender y apagar muy rápido |
+| **Trim** | Ajuste fino para emparejar las dos ruedas |
+| **GND** | "Tierra": el cero del circuito. Todo tiene que compartirlo |
+| **Divisor de tensión** | Dos resistencias que bajan 5 V a 3.3 V para no dañar el ESP32 |
+| **Condensador** | Guarda un poco de energía y la suelta rápido, para tapar los bajones |
+| **Failsafe** | La protección que frena el carro si se pierde la conexión |
+| **Brownout** | Un reinicio por falta de voltaje |
+| **NVS** | La memoria del ESP32 donde se guarda la calibración aunque se apague |
+| **Encoder** | Sensor que cuenta cuánto giró una rueda. Este carro no lleva |

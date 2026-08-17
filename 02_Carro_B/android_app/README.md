@@ -172,8 +172,10 @@ desplazamiento corto sobre el vidrio ya barre todo el rango util. Al 150 % hay q
 el dedo una vez y media mas para el mismo efecto, y la perilla sigue llegando al borde
 justo cuando el dedo llega al tope, de modo que lo que se ve coincide con lo que se manda.
 
-El tope es 200 % porque los sticks van pegados a las esquinas: mas recorrido que ese no
-cabe entre el centro del stick y el borde de la pantalla.
+El rango va de 50 a 150 %. Por debajo de 100 el dedo llega al tope antes del borde
+dibujado, que es lo que pide una tablet: el circulo ya es grande y estirar el pulgar hasta
+el borde cansa. Por encima hay que pasarse del borde, que es lo que pide un telefono,
+donde el circulo es chico y un pulgar grueso lo barre entero de un movimiento.
 
 **Fuerza de giro** es la que mas se nota. Al 100 % el stick al tope hace girar el carro
 sobre su propio eje, que sirve para maniobrar en el sitio pero vuelve imposible trazar
