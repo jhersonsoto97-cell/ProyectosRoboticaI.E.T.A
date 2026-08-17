@@ -612,5 +612,5 @@ no poder dejar el dedo, hay que bajarle el voltaje de entrada con un módulo red
 
 <p align="center">
   Proyecto de robótica con fines educativos 🤖<br>
-  <sub><b>Docente:</b> Yerson Soto</sub>
+  <sub><b>Docente:</b> Yerson Soto &nbsp;·&nbsp; <b>Desarrollo:</b> Yeison Dénnir Termal Cuastumal</sub>
 </p>

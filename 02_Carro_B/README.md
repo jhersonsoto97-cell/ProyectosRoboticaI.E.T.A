@@ -473,5 +473,5 @@ misma batería.
 
 <p align="center">
   Proyecto de robótica con fines educativos 🤖<br>
-  <sub><b>Docente:</b> Yerson Soto</sub>
+  <sub><b>Docente:</b> Yerson Soto &nbsp;·&nbsp; <b>Desarrollo:</b> Yeison Dénnir Termal Cuastumal</sub>
 </p>
