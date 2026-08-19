@@ -130,5 +130,5 @@ una pared.
 
 <p align="center">
   Proyecto de robótica con fines educativos 🤖<br>
-  <sub><b>Docente:</b> Yerson Soto &nbsp;·&nbsp; <b>Ingenieria y Desarrollo:</b> Yeison Dénnir Termal Cuastumal</sub>
+  <sub><b>Docente:</b> Yerson Soto &nbsp;·&nbsp; <b>Ingeniería y Desarrollo:</b> Yeison Dénnir Termal Cuastumal</sub>
 </p>
